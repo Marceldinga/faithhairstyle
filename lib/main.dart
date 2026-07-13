@@ -6,7 +6,7 @@ const supabaseUrl = 'https://lowqtmndtkgwmnyhqszp.supabase.co';
 const supabaseAnonKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxvd3F0bW5kdGtnd21ueWhxc3pwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODgzMjQsImV4cCI6MjA4ODY2NDMyNH0.DAD_IfgcnXSnMfhu0MCl-CBVIVIEUSe9Yh7JbdvOhtw';
 
-const whatsappNumber = '13015419874';
+const whatsappNumber = '13015419875';
 const instagramUrl = 'https://www.instagram.com/faith_styl_/';
 const tiktokUrl = 'https://www.tiktok.com/@nfor.ako';
 const bookingUrl =
