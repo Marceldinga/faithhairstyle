@@ -1,0 +1,5 @@
+[functions.chat-assistant]
+enabled = true
+verify_jwt = false
+import_map = "./functions/chat-assistant/deno.json"
+entrypoint = "./functions/chat-assistant/index.ts"
