@@ -12,13 +12,17 @@ const tiktokUrl = 'https://www.tiktok.com/@nfor.ako';
 const bookingUrl =
     'https://docs.google.com/forms/d/1vvAIeCi7BZ-kJJff-SzTskWn2u1kD3KBlDpwXl42SpY/viewform';
 
-const kPrimary = Color(0xFFE91E63);
-const kPrimaryDark = Color(0xFFB01449);
-const kInk = Color(0xFF24161B);
-const kMuted = Color(0xFF7A6870);
-const kSurface = Color(0xFFFFFBFC);
-const kSoftPink = Color(0xFFFCE4EC);
-const kBorder = Color(0xFFEAD5DD);
+// Faith Hair Style luxury business palette.
+const kPrimary = Color(0xFFD4A437); // Gold
+const kPrimaryDark = Color(0xFF8C6518); // Dark gold
+const kInk = Color(0xFF17130F); // Luxury black
+const kMuted = Color(0xFF756A5E); // Warm muted text
+const kSurface = Color(0xFFFFF8EE); // Cream background
+const kSoftPink = Color(0xFFF4E7C8); // Soft gold/cream highlight
+const kBorder = Color(0xFFE4D3B5); // Warm border
+const kCard = Color(0xFFFFFFFF);
+const kDarkSurface = Color(0xFF241C13);
+const kAccentPink = Color(0xFFD94B78);
 
 // Booking time display settings.
 // This shows the whole business day instead of only a few fixed slots.
@@ -28,7 +32,7 @@ const bookingIntervalMinutes = 30;
 
 // Simple owner PIN for opening the in-app live chat inbox.
 // Change this before sharing the admin side publicly.
-const ownerChatPin = '1234';
+const ownerChatPin = '199900';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +49,64 @@ Future<void> openUrl(String url) async {
   }
 }
 
+Future<void> openPrivateOwnerDashboard(BuildContext context) async {
+  final pinController = TextEditingController();
+
+  final allowed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('Owner access'),
+        content: TextField(
+          controller: pinController,
+          autofocus: true,
+          obscureText: true,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(
+            labelText: 'Owner PIN',
+            prefixIcon: Icon(Icons.lock_rounded),
+          ),
+          onSubmitted: (_) {
+            Navigator.pop(
+              dialogContext,
+              pinController.text.trim() == ownerChatPin,
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(
+                dialogContext,
+                pinController.text.trim() == ownerChatPin,
+              );
+            },
+            child: const Text('Open dashboard'),
+          ),
+        ],
+      );
+    },
+  );
+
+  pinController.dispose();
+  if (!context.mounted) return;
+
+  if (allowed == true) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const OwnerDashboardPage()),
+    );
+  } else if (allowed == false) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Wrong owner PIN.')),
+    );
+  }
+}
+
 class FaithHairApp extends StatelessWidget {
   const FaithHairApp({super.key});
 
@@ -55,26 +117,113 @@ class FaithHairApp extends StatelessWidget {
       title: 'Faith Hair Style',
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: kPrimary,
-          brightness: Brightness.light,
+        brightness: Brightness.light,
+        colorScheme: const ColorScheme.light(
+          primary: kPrimary,
+          onPrimary: kInk,
+          secondary: kInk,
+          onSecondary: Colors.white,
+          tertiary: kAccentPink,
+          onTertiary: Colors.white,
+          surface: kCard,
+          onSurface: kInk,
+          outline: kBorder,
+          error: Color(0xFFB3261E),
+          onError: Colors.white,
         ),
         scaffoldBackgroundColor: kSurface,
         appBarTheme: const AppBarTheme(
           elevation: 0,
           scrolledUnderElevation: 0,
-          backgroundColor: kSurface,
+          backgroundColor: kCard,
           foregroundColor: kInk,
           centerTitle: false,
+          iconTheme: IconThemeData(color: kPrimaryDark),
+          actionsIconTheme: IconThemeData(color: kPrimaryDark),
           titleTextStyle: TextStyle(
             color: kInk,
             fontSize: 20,
             fontWeight: FontWeight.w800,
           ),
         ),
+        navigationRailTheme: const NavigationRailThemeData(
+          backgroundColor: kInk,
+          indicatorColor: kDarkSurface,
+          selectedIconTheme: IconThemeData(color: kPrimary, size: 27),
+          unselectedIconTheme: IconThemeData(color: Colors.white70, size: 24),
+          selectedLabelTextStyle: TextStyle(
+            color: kPrimary,
+            fontWeight: FontWeight.w800,
+          ),
+          unselectedLabelTextStyle: TextStyle(color: Colors.white70),
+        ),
+        navigationBarTheme: const NavigationBarThemeData(
+          backgroundColor: kInk,
+          indicatorColor: kDarkSurface,
+          iconTheme: WidgetStatePropertyAll(
+            IconThemeData(color: kPrimary),
+          ),
+          labelTextStyle: WidgetStatePropertyAll(
+            TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
+        cardTheme: CardThemeData(
+          color: kCard,
+          elevation: 2,
+          shadowColor: Colors.black.withValues(alpha: 0.08),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: const BorderSide(color: kBorder),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: kPrimary,
+            foregroundColor: kInk,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: kInk,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: kInk,
+            side: const BorderSide(color: kPrimary, width: 1.4),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: kPrimaryDark,
+            textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: kPrimary,
+          foregroundColor: kInk,
+        ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.white,
+          fillColor: kCard,
+          prefixIconColor: kPrimaryDark,
+          suffixIconColor: kPrimaryDark,
+          hintStyle: const TextStyle(color: kMuted),
+          labelStyle: const TextStyle(color: kMuted),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(
@@ -87,8 +236,40 @@ class FaithHairApp extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: kPrimary, width: 1.4),
+            borderSide: const BorderSide(color: kPrimary, width: 1.6),
           ),
+        ),
+        chipTheme: ChipThemeData(
+          backgroundColor: kSoftPink,
+          selectedColor: kPrimary,
+          checkmarkColor: kInk,
+          labelStyle: const TextStyle(
+            color: kInk,
+            fontWeight: FontWeight.w700,
+          ),
+          side: const BorderSide(color: kBorder),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: kCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+        ),
+        snackBarTheme: const SnackBarThemeData(
+          backgroundColor: kInk,
+          contentTextStyle: TextStyle(color: Colors.white),
+          actionTextColor: kPrimary,
+          behavior: SnackBarBehavior.floating,
+        ),
+        dividerTheme: const DividerThemeData(
+          color: kBorder,
+          thickness: 1,
+        ),
+        progressIndicatorTheme: const ProgressIndicatorThemeData(
+          color: kPrimary,
         ),
       ),
       home: const MainPage(),
@@ -111,11 +292,12 @@ class _MainPageState extends State<MainPage> {
     NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
     NavigationDestination(
         icon: Icon(Icons.photo_library_rounded), label: 'Gallery'),
-    NavigationDestination(icon: Icon(Icons.smart_toy_rounded), label: 'AI Help'),
+    NavigationDestination(
+        icon: Icon(Icons.smart_toy_rounded), label: 'AI Help'),
     NavigationDestination(
         icon: Icon(Icons.calendar_month_rounded), label: 'Book'),
-    NavigationDestination(icon: Icon(Icons.support_agent_rounded), label: 'Live Chat'),
-    NavigationDestination(icon: Icon(Icons.admin_panel_settings_rounded), label: 'Owner Inbox'),
+    NavigationDestination(
+        icon: Icon(Icons.support_agent_rounded), label: 'Live Chat'),
     NavigationDestination(icon: Icon(Icons.share_rounded), label: 'Social'),
   ];
 
@@ -139,10 +321,6 @@ class _MainPageState extends State<MainPage> {
     NavigationRailDestination(
       icon: Icon(Icons.support_agent_rounded),
       label: Text('Live Chat'),
-    ),
-    NavigationRailDestination(
-      icon: Icon(Icons.admin_panel_settings_rounded),
-      label: Text('Owner Inbox'),
     ),
     NavigationRailDestination(
       icon: Icon(Icons.share_rounded),
@@ -173,8 +351,6 @@ class _MainPageState extends State<MainPage> {
       case 4:
         return const LiveChatPage();
       case 5:
-        return const OwnerInboxGatePage();
-      case 6:
         return const SocialPage();
       default:
         return HomePage(
@@ -197,20 +373,16 @@ class _MainPageState extends State<MainPage> {
               selectedIndex: page,
               onDestinationSelected: (i) => setState(() => page = i),
               labelType: NavigationRailLabelType.all,
-              backgroundColor: Colors.white,
-              indicatorColor: kSoftPink,
-              selectedIconTheme: const IconThemeData(color: kPrimary),
-              selectedLabelTextStyle: const TextStyle(
-                color: kPrimary,
-                fontWeight: FontWeight.w800,
-              ),
-              unselectedLabelTextStyle: const TextStyle(color: kMuted),
-              leading: const Padding(
-                padding: EdgeInsets.only(top: 16, bottom: 12),
-                child: CircleAvatar(
-                  radius: 22,
-                  backgroundColor: kPrimary,
-                  child: Icon(Icons.content_cut_rounded, color: Colors.white),
+              leading: Padding(
+                padding: const EdgeInsets.only(top: 16, bottom: 12),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.asset(
+                    'assets/icon/app_icon.png',
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
               destinations: railDestinations,
@@ -231,7 +403,6 @@ class _MainPageState extends State<MainPage> {
           : NavigationBar(
               selectedIndex: page,
               onDestinationSelected: (i) => setState(() => page = i),
-              indicatorColor: kSoftPink,
               destinations: bottomDestinations,
             ),
     );
@@ -390,10 +561,20 @@ class BusinessAppBar extends StatelessWidget implements PreferredSizeWidget {
       titleSpacing: 18,
       title: Row(
         children: [
-          const CircleAvatar(
-            radius: 17,
-            backgroundColor: kSoftPink,
-            child: Icon(Icons.content_cut_rounded, size: 18, color: kPrimary),
+          Tooltip(
+            message: 'Faith Hair Style',
+            child: GestureDetector(
+              onLongPress: () => openPrivateOwnerDashboard(context),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'assets/icon/app_icon.png',
+                  width: 36,
+                  height: 36,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
           ),
           const SizedBox(width: 10),
           Flexible(
@@ -440,7 +621,7 @@ class HeroSection extends StatelessWidget {
       width: double.infinity,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [kPrimary, kPrimaryDark],
+          colors: [kInk, kDarkSurface, kPrimaryDark],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -542,7 +723,7 @@ class _HeroCopy extends StatelessWidget {
               label: const Text('Book Appointment'),
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: kPrimaryDark,
+                foregroundColor: kInk,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               ),
@@ -574,7 +755,7 @@ class HeroInfoCard extends StatelessWidget {
       width: 340,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.14),
+        color: Colors.white.withValues(alpha: .14),
         borderRadius: BorderRadius.circular(26),
         border: Border.all(color: Colors.white24),
       ),
@@ -863,8 +1044,17 @@ class ServicePlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: kSoftPink,
-      child: const Center(
-        child: Icon(Icons.content_cut_rounded, size: 58, color: kPrimary),
+      padding: const EdgeInsets.all(28),
+      child: Center(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Image.asset(
+            'assets/icon/app_icon.png',
+            width: 92,
+            height: 92,
+            fit: BoxFit.cover,
+          ),
+        ),
       ),
     );
   }
@@ -937,8 +1127,10 @@ class _GalleryPageState extends State<GalleryPage> {
                   }
 
                   final items = (snap.data ?? [])
-                      .where((item) =>
-                          (item['image_url'] ?? '').toString().trim().isNotEmpty)
+                      .where((item) => (item['image_url'] ?? '')
+                          .toString()
+                          .trim()
+                          .isNotEmpty)
                       .toList();
 
                   if (items.isEmpty) {
@@ -1183,7 +1375,9 @@ class _AiPageState extends State<AiPage> {
       return 'Hair may be provided for some styles. You can also bring your own hair if you prefer a specific color, brand, or length.';
     }
 
-    if (q.contains('location') || q.contains('where') || q.contains('address')) {
+    if (q.contains('location') ||
+        q.contains('where') ||
+        q.contains('address')) {
       return 'Faith Hair Style is located in Riverdale, Maryland. Appointment details can be shared after booking.';
     }
 
@@ -1267,7 +1461,8 @@ class _AiPageState extends State<AiPage> {
                       ActionChip(
                         avatar: const Icon(Icons.attach_money_rounded),
                         label: const Text('How much are braids?'),
-                        onPressed: () => askQuickQuestion('How much are braids?'),
+                        onPressed: () =>
+                            askQuickQuestion('How much are braids?'),
                       ),
                       ActionChip(
                         avatar: const Icon(Icons.calendar_month_rounded),
@@ -1277,7 +1472,8 @@ class _AiPageState extends State<AiPage> {
                       ActionChip(
                         avatar: const Icon(Icons.child_care_rounded),
                         label: const Text('Do you do kids styles?'),
-                        onPressed: () => askQuickQuestion('Do you do kids styles?'),
+                        onPressed: () =>
+                            askQuickQuestion('Do you do kids styles?'),
                       ),
                     ],
                   ),
@@ -1314,7 +1510,7 @@ class _AiPageState extends State<AiPage> {
                         border: isBot ? Border.all(color: kBorder) : null,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(.04),
+                            color: Colors.black.withValues(alpha: .04),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -1374,7 +1570,6 @@ class _AiPageState extends State<AiPage> {
     );
   }
 }
-
 
 class LiveChatPage extends StatefulWidget {
   const LiveChatPage({super.key});
@@ -1514,8 +1709,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, controller.text.trim() == ownerChatPin),
+              onPressed: () => Navigator.pop(
+                  context, controller.text.trim() == ownerChatPin),
               style: FilledButton.styleFrom(
                 backgroundColor: kPrimary,
                 foregroundColor: Colors.white,
@@ -1545,16 +1740,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: BusinessAppBar(
-        title: 'Live Chat',
-        extraActions: [
-          IconButton(
-            tooltip: 'Owner Inbox',
-            icon: const Icon(Icons.admin_panel_settings_rounded),
-            onPressed: openOwnerInbox,
-          ),
-        ],
-      ),
+      appBar: const BusinessAppBar(title: 'Live Chat'),
       body: sessionId == null ? buildStartChat() : buildChat(),
     );
   }
@@ -1631,7 +1817,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.support_agent_rounded),
-                      label: Text(starting ? 'Starting chat...' : 'Start Live Chat'),
+                      label: Text(
+                          starting ? 'Starting chat...' : 'Start Live Chat'),
                       style: FilledButton.styleFrom(
                         backgroundColor: kPrimary,
                         foregroundColor: Colors.white,
@@ -1715,7 +1902,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
                 final messages = snapshot.data ?? [];
 
-                WidgetsBinding.instance.addPostFrameCallback((_) => scrollToBottom());
+                WidgetsBinding.instance
+                    .addPostFrameCallback((_) => scrollToBottom());
 
                 return ListView.builder(
                   controller: scrollController,
@@ -1775,6 +1963,330 @@ class _LiveChatPageState extends State<LiveChatPage> {
   }
 }
 
+class OwnerDashboardPage extends StatelessWidget {
+  const OwnerDashboardPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: kInk,
+          foregroundColor: Colors.white,
+          title: const Text('Owner Dashboard'),
+          bottom: const TabBar(
+            indicatorColor: kPrimary,
+            labelColor: kPrimary,
+            unselectedLabelColor: Colors.white70,
+            tabs: [
+              Tab(
+                icon: Icon(Icons.calendar_month_rounded),
+                text: 'Bookings',
+              ),
+              Tab(
+                icon: Icon(Icons.forum_rounded),
+                text: 'Messages',
+              ),
+            ],
+          ),
+        ),
+        body: const TabBarView(
+          children: [
+            OwnerBookingsPage(),
+            OwnerChatInboxPage(embedded: true),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class OwnerBookingsPage extends StatefulWidget {
+  const OwnerBookingsPage({super.key});
+
+  @override
+  State<OwnerBookingsPage> createState() => _OwnerBookingsPageState();
+}
+
+class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
+  final supabase = Supabase.instance.client;
+
+  Future<String> serviceName(dynamic serviceId) async {
+    if (serviceId == null) return 'Unknown service';
+
+    try {
+      final result = await supabase
+          .from('services')
+          .select('name')
+          .eq('id', serviceId)
+          .maybeSingle();
+
+      return (result?['name'] ?? 'Service').toString();
+    } catch (_) {
+      return 'Service';
+    }
+  }
+
+  Future<void> updateBookingStatus(
+    dynamic bookingId,
+    String status,
+  ) async {
+    try {
+      await supabase
+          .from('bookings')
+          .update({'status': status}).eq('id', bookingId);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Booking marked $status.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update booking: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: supabase
+          .from('bookings')
+          .stream(primaryKey: ['id']).order('created_at', ascending: false),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const LoadingState(text: 'Loading bookings...');
+        }
+
+        if (snapshot.hasError) {
+          return EmptyState(
+            icon: Icons.error_outline_rounded,
+            title: 'Could not load bookings',
+            message: snapshot.error.toString(),
+          );
+        }
+
+        final bookings = snapshot.data ?? [];
+        if (bookings.isEmpty) {
+          return const EmptyState(
+            icon: Icons.event_available_rounded,
+            title: 'No bookings yet',
+            message: 'New customer booking requests will appear here.',
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: bookings.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (_, index) {
+            final booking = bookings[index];
+            final id = booking['id'];
+            final customer =
+                (booking['customer_name'] ?? 'Customer').toString();
+            final phone = (booking['phone'] ?? '').toString();
+            final email = (booking['email'] ?? '').toString();
+            final date = (booking['booking_date'] ?? '').toString();
+            final start = (booking['start_time'] ?? '').toString();
+            final end = (booking['end_time'] ?? '').toString();
+            final notes = (booking['notes'] ?? '').toString();
+            final status = (booking['status'] ?? 'pending').toString();
+            final colorCode = (booking['hair_color_code'] ?? '').toString();
+
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const CircleAvatar(
+                          backgroundColor: kSoftPink,
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: kPrimaryDark,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                customer,
+                                style: const TextStyle(
+                                  color: kInk,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              FutureBuilder<String>(
+                                future: serviceName(booking['service_id']),
+                                builder: (_, serviceSnapshot) {
+                                  return Text(
+                                    serviceSnapshot.data ??
+                                        'Loading service...',
+                                    style: const TextStyle(
+                                      color: kPrimaryDark,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        _BookingStatusBadge(status: status),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 18,
+                      runSpacing: 10,
+                      children: [
+                        _OwnerDetail(
+                          icon: Icons.calendar_today_rounded,
+                          text: date.isEmpty ? 'No date' : date,
+                        ),
+                        _OwnerDetail(
+                          icon: Icons.schedule_rounded,
+                          text: start.isEmpty
+                              ? 'No time'
+                              : '$start${end.isEmpty ? '' : ' – $end'}',
+                        ),
+                        if (phone.isNotEmpty)
+                          _OwnerDetail(
+                            icon: Icons.phone_rounded,
+                            text: phone,
+                          ),
+                        if (email.isNotEmpty)
+                          _OwnerDetail(
+                            icon: Icons.email_rounded,
+                            text: email,
+                          ),
+                        if (colorCode.isNotEmpty)
+                          _OwnerDetail(
+                            icon: Icons.palette_rounded,
+                            text: 'Hair color $colorCode',
+                          ),
+                      ],
+                    ),
+                    if (notes.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        'Notes: $notes',
+                        style: const TextStyle(
+                          color: kMuted,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: status == 'confirmed'
+                              ? null
+                              : () => updateBookingStatus(id, 'confirmed'),
+                          icon: const Icon(Icons.check_circle_rounded),
+                          label: const Text('Confirm'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: status == 'cancelled'
+                              ? null
+                              : () => updateBookingStatus(id, 'cancelled'),
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: const Text('Cancel'),
+                        ),
+                        if (phone.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: () => openUrl(
+                              'https://wa.me/${phone.replaceAll(RegExp(r'[^0-9]'), '')}',
+                            ),
+                            icon: const Icon(Icons.chat_rounded),
+                            label: const Text('WhatsApp'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _OwnerDetail extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _OwnerDetail({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: kPrimaryDark),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: const TextStyle(
+            color: kMuted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BookingStatusBadge extends StatelessWidget {
+  final String status;
+
+  const _BookingStatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = status.toLowerCase();
+    final color = normalized == 'confirmed'
+        ? Colors.green
+        : normalized == 'cancelled'
+            ? Colors.redAccent
+            : kPrimaryDark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        normalized.toUpperCase(),
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
 
 class OwnerInboxGatePage extends StatefulWidget {
   const OwnerInboxGatePage({super.key});
@@ -1884,7 +2396,12 @@ class _OwnerInboxGatePageState extends State<OwnerInboxGatePage> {
 }
 
 class OwnerChatInboxPage extends StatefulWidget {
-  const OwnerChatInboxPage({super.key});
+  final bool embedded;
+
+  const OwnerChatInboxPage({
+    super.key,
+    this.embedded = false,
+  });
 
   @override
   State<OwnerChatInboxPage> createState() => _OwnerChatInboxPageState();
@@ -1899,19 +2416,23 @@ class _OwnerChatInboxPageState extends State<OwnerChatInboxPage> {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 850;
 
+    final content = wide
+        ? Row(
+            children: [
+              SizedBox(width: 360, child: buildSessionsList()),
+              const VerticalDivider(width: 1),
+              Expanded(child: buildSelectedChat()),
+            ],
+          )
+        : selectedSessionId == null
+            ? buildSessionsList()
+            : buildSelectedChat(showBack: true);
+
+    if (widget.embedded) return content;
+
     return Scaffold(
       appBar: const BusinessAppBar(title: 'Owner Chat Inbox'),
-      body: wide
-          ? Row(
-              children: [
-                SizedBox(width: 360, child: buildSessionsList()),
-                const VerticalDivider(width: 1),
-                Expanded(child: buildSelectedChat()),
-              ],
-            )
-          : selectedSessionId == null
-              ? buildSessionsList()
-              : buildSelectedChat(showBack: true),
+      body: content,
     );
   }
 
@@ -1919,8 +2440,7 @@ class _OwnerChatInboxPageState extends State<OwnerChatInboxPage> {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: supabase
           .from('chat_sessions')
-          .stream(primaryKey: ['id'])
-          .order('updated_at', ascending: false),
+          .stream(primaryKey: ['id']).order('updated_at', ascending: false),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -2205,7 +2725,8 @@ class _OwnerChatThreadState extends State<OwnerChatThread> {
               }
 
               final messages = snapshot.data ?? [];
-              WidgetsBinding.instance.addPostFrameCallback((_) => scrollToBottom());
+              WidgetsBinding.instance
+                  .addPostFrameCallback((_) => scrollToBottom());
 
               return ListView.builder(
                 controller: scrollController,
@@ -2291,7 +2812,7 @@ class ChatBubble extends StatelessWidget {
           border: isCustomer ? null : Border.all(color: kBorder),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(.04),
+              color: Colors.black.withValues(alpha: .04),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -2736,7 +3257,8 @@ class _BookingPageState extends State<BookingPage> {
                         future: slotsFuture,
                         builder: (_, snap) {
                           if (snap.connectionState == ConnectionState.waiting) {
-                            return const LoadingState(text: 'Loading day times...');
+                            return const LoadingState(
+                                text: 'Loading day times...');
                           }
 
                           if (snap.hasError) {
@@ -2790,7 +3312,8 @@ class _BookingPageState extends State<BookingPage> {
                                   );
                                 }).toList(),
                               ),
-                              if (selectedStartTime != null && selectedEndTime != null) ...[
+                              if (selectedStartTime != null &&
+                                  selectedEndTime != null) ...[
                                 const SizedBox(height: 10),
                                 Text(
                                   'Selected: ${formatTime(selectedStartTime!)} - ${formatTime(selectedEndTime!)}',
@@ -2833,7 +3356,8 @@ class _BookingPageState extends State<BookingPage> {
                                   ),
                                 )
                               : const Icon(Icons.send_rounded),
-                          label: Text(submitting ? 'Sending...' : 'Submit Booking'),
+                          label: Text(
+                              submitting ? 'Sending...' : 'Submit Booking'),
                           style: FilledButton.styleFrom(
                             backgroundColor: kPrimary,
                             foregroundColor: Colors.white,
@@ -2844,7 +3368,8 @@ class _BookingPageState extends State<BookingPage> {
                           ),
                         ),
                         OutlinedButton.icon(
-                          onPressed: () => openUrl('https://wa.me/$whatsappNumber'),
+                          onPressed: () =>
+                              openUrl('https://wa.me/$whatsappNumber'),
                           icon: const Icon(Icons.chat_rounded),
                           label: const Text('Message on WhatsApp'),
                           style: OutlinedButton.styleFrom(
@@ -3264,7 +3789,9 @@ String formatDuration(dynamic value) {
   final minutes = int.tryParse(text);
   if (minutes == null) {
     final lower = text.toLowerCase();
-    if (lower.contains('min') || lower.contains('hr') || lower.contains('hour')) {
+    if (lower.contains('min') ||
+        lower.contains('hr') ||
+        lower.contains('hour')) {
       return text;
     }
     return '$text min';
@@ -3282,9 +3809,8 @@ String formatPrice(dynamic value) {
   if (value == null) return 'Price varies';
 
   if (value is num) {
-    final amount = value % 1 == 0
-        ? value.toInt().toString()
-        : value.toStringAsFixed(2);
+    final amount =
+        value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);
     return 'From \$$amount';
   }
 
