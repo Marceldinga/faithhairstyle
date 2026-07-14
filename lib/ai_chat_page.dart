@@ -361,7 +361,6 @@ class _AIChatPageState extends State<AIChatPage> {
                 ],
               ),
             ),
-
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -377,7 +376,6 @@ class _AIChatPageState extends State<AIChatPage> {
                 ],
               ),
             ),
-
             Expanded(
               child: ListView.builder(
                 controller: scrollController,
@@ -386,7 +384,6 @@ class _AIChatPageState extends State<AIChatPage> {
                 itemBuilder: (_, index) => messageBubble(messages[index]),
               ),
             ),
-
             Container(
               padding: const EdgeInsets.all(14),
               color: Colors.white,

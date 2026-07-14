@@ -166,32 +166,24 @@ class _BookingPageState extends State<BookingPage> {
                 subtitle: Text('Price: \$$servicePrice'),
               ),
             ),
-
             const SizedBox(height: 15),
-
             TextField(
               controller: nameController,
               decoration: const InputDecoration(labelText: 'Name'),
             ),
-
             const SizedBox(height: 10),
-
             TextField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(labelText: 'Phone'),
             ),
-
             const SizedBox(height: 10),
-
             TextField(
               controller: emailController,
               keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(labelText: 'Email'),
             ),
-
             const SizedBox(height: 15),
-
             ListTile(
               title: Text(
                 selectedDate == null
@@ -201,7 +193,6 @@ class _BookingPageState extends State<BookingPage> {
               trailing: const Icon(Icons.calendar_today),
               onTap: pickDate,
             ),
-
             ListTile(
               title: Text(
                 selectedTime == null
@@ -211,9 +202,7 @@ class _BookingPageState extends State<BookingPage> {
               trailing: const Icon(Icons.access_time),
               onTap: pickTime,
             ),
-
             const SizedBox(height: 15),
-
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: 'Hair Color'),
               value: selectedHairColor,
@@ -232,9 +221,7 @@ class _BookingPageState extends State<BookingPage> {
                 });
               },
             ),
-
             const SizedBox(height: 20),
-
             ElevatedButton(
               onPressed: submitBooking,
               child: const Text('Confirm Booking'),

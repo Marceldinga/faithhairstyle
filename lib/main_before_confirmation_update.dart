@@ -2033,76 +2033,16 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
     String status,
   ) async {
     try {
-      // Update the booking status in Supabase.
-      final booking = await supabase
+      await supabase
           .from('bookings')
-          .update({
-            'status': status,
-          })
-          .eq('id', bookingId)
-          .select()
-          .single();
+          .update({'status': status}).eq('id', bookingId);
 
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Booking marked $status.')),
       );
-
-      // Open WhatsApp with a prepared confirmation message.
-      if (status == 'confirmed') {
-        var phone = (booking['phone'] ?? '')
-            .toString()
-            .replaceAll(RegExp(r'[^0-9]'), '');
-
-        // Add the United States country code when a 10-digit number was saved.
-        if (phone.length == 10) {
-          phone = '1$phone';
-        }
-
-        if (phone.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Booking confirmed, but the customer has no phone number.',
-              ),
-            ),
-          );
-          return;
-        }
-
-        final customer = (booking['customer_name'] ?? 'Customer').toString();
-        final bookingDate = (booking['booking_date'] ?? '').toString();
-        final startTime = (booking['start_time'] ?? '').toString();
-
-        final message = Uri.encodeComponent(
-          'Hello $customer, your appointment at Faith Hair Style '
-          'for $bookingDate at $startTime has been confirmed. '
-          'We look forward to seeing you!',
-        );
-
-        final whatsappUri = Uri.parse(
-          'https://wa.me/$phone?text=$message',
-        );
-
-        final opened = await launchUrl(
-          whatsappUri,
-          mode: LaunchMode.externalApplication,
-        );
-
-        if (!opened && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Booking confirmed, but WhatsApp could not be opened.',
-              ),
-            ),
-          );
-        }
-      }
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not update booking: $e')),
       );

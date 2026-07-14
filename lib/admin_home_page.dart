@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'customer_home_page.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -96,14 +97,17 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   int get totalBookings => bookings.length;
 
-  int get pendingBookings =>
-      bookings.where((b) => (b['status'] ?? '').toString().toLowerCase() == 'pending').length;
+  int get pendingBookings => bookings
+      .where((b) => (b['status'] ?? '').toString().toLowerCase() == 'pending')
+      .length;
 
-  int get confirmedBookings =>
-      bookings.where((b) => (b['status'] ?? '').toString().toLowerCase() == 'confirmed').length;
+  int get confirmedBookings => bookings
+      .where((b) => (b['status'] ?? '').toString().toLowerCase() == 'confirmed')
+      .length;
 
-  int get completedBookings =>
-      bookings.where((b) => (b['status'] ?? '').toString().toLowerCase() == 'completed').length;
+  int get completedBookings => bookings
+      .where((b) => (b['status'] ?? '').toString().toLowerCase() == 'completed')
+      .length;
 
   List<String> get statusFilters => const [
         'All',
@@ -159,35 +163,77 @@ class _AdminHomePageState extends State<AdminHomePage> {
     }
   }
 
-  Future<void> updateBookingStatus(dynamic bookingId, String newStatus) async {
+  Future<void> updateBookingStatus(
+    dynamic bookingId,
+    String status,
+  ) async {
     try {
-      await supabase
-          .from('bookings')
-          .update({'status': newStatus})
-          .eq('id', bookingId);
+      // Update the booking status in Supabase.
+      await supabase.from('bookings').update({
+        'status': status,
+      }).eq('id', bookingId);
+
+      // Get the booking information for the notification.
+      final booking =
+          await supabase.from('bookings').select().eq('id', bookingId).single();
 
       if (!mounted) return;
 
-      setState(() {
-        bookings = bookings.map((booking) {
-          if (booking['id'] == bookingId) {
-            return {
-              ...booking,
-              'status': newStatus,
-            };
-          }
-          return booking;
-        }).toList();
-      });
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Booking updated to $newStatus')),
+        SnackBar(
+          content: Text('Booking marked $status.'),
+        ),
       );
+
+      // When confirmed, open WhatsApp with a prepared message.
+      if (status == 'confirmed') {
+        var phone = (booking['phone'] ?? '')
+            .toString()
+            .replaceAll(RegExp(r'[^0-9]'), '');
+
+        // Add the United States country code to a 10-digit number.
+        if (phone.length == 10) {
+          phone = '1$phone';
+        }
+
+        if (phone.isNotEmpty) {
+          final customer = (booking['customer_name'] ?? 'Customer').toString();
+          final date = (booking['booking_date'] ?? '').toString();
+          final startTime = (booking['start_time'] ?? '').toString();
+
+          final message = Uri.encodeComponent(
+            'Hello $customer, your appointment at Faith Hair Style '
+            'for $date at $startTime has been confirmed. '
+            'We look forward to seeing you!',
+          );
+
+          final whatsappUri = Uri.parse(
+            'https://wa.me/$phone?text=$message',
+          );
+
+          final opened = await launchUrl(
+            whatsappUri,
+            mode: LaunchMode.externalApplication,
+          );
+
+          if (!opened && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Booking confirmed, but WhatsApp could not be opened.',
+                ),
+              ),
+            );
+          }
+        }
+      }
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update booking: $e')),
+        SnackBar(
+          content: Text('Could not update booking: $e'),
+        ),
       );
     }
   }
@@ -465,7 +511,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Widget buildBookingCard(Map<String, dynamic> booking) {
     final service = serviceMap[booking['service_id']];
-    final serviceName = service?['name']?.toString() ?? 'Service #${booking['service_id']}';
+    final serviceName =
+        service?['name']?.toString() ?? 'Service #${booking['service_id']}';
     final serviceCategory = service?['category']?.toString() ?? 'General';
     final customerName = booking['customer_name']?.toString() ?? 'Customer';
     final phone = booking['phone']?.toString() ?? 'No phone';
@@ -572,7 +619,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 isSmall ? CrossAxisAlignment.start : CrossAxisAlignment.end,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                 decoration: BoxDecoration(
                   color: statusColor(status).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(30),
@@ -595,19 +643,22 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     buildActionButton(
                       text: 'Approve',
                       color: const Color(0xFF2563EB),
-                      onTap: () => updateBookingStatus(booking['id'], 'confirmed'),
+                      onTap: () =>
+                          updateBookingStatus(booking['id'], 'confirmed'),
                     ),
                   if (status.toLowerCase() != 'completed')
                     buildActionButton(
                       text: 'Complete',
                       color: const Color(0xFF16A34A),
-                      onTap: () => updateBookingStatus(booking['id'], 'completed'),
+                      onTap: () =>
+                          updateBookingStatus(booking['id'], 'completed'),
                     ),
                   if (status.toLowerCase() != 'cancelled')
                     buildActionButton(
                       text: 'Cancel',
                       color: const Color(0xFFDC2626),
-                      onTap: () => updateBookingStatus(booking['id'], 'cancelled'),
+                      onTap: () =>
+                          updateBookingStatus(booking['id'], 'cancelled'),
                     ),
                 ],
               ),
