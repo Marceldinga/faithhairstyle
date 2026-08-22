@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -12,17 +12,17 @@ const tiktokUrl = 'https://www.tiktok.com/@nfor.ako';
 const bookingUrl =
     'https://docs.google.com/forms/d/1vvAIeCi7BZ-kJJff-SzTskWn2u1kD3KBlDpwXl42SpY/viewform';
 
-// Faith Hair Style luxury gold + royal-blue palette.
-const kPrimary = Color(0xFFD4AF37); // Luxury metallic gold
-const kPrimaryDark = Color(0xFF9A7200); // Deep gold
-const kInk = Color(0xFF061A40); // Deep navy
-const kMuted = Color(0xFF5C6B84); // Blue-gray text
-const kSurface = Color(0xFFFFF9E8); // Warm ivory background
-const kSoftPink = Color(0xFFFFF1B8); // Soft gold highlight
-const kBorder = Color(0xFFD8BE68); // Elegant gold border
+// Faith Hair Style luxury business palette.
+const kPrimary = Color(0xFFD4A437); // Gold
+const kPrimaryDark = Color(0xFF8C6518); // Dark gold
+const kInk = Color(0xFF17130F); // Luxury black
+const kMuted = Color(0xFF756A5E); // Warm muted text
+const kSurface = Color(0xFFFFF8EE); // Cream background
+const kSoftPink = Color(0xFFF4E7C8); // Soft gold/cream highlight
+const kBorder = Color(0xFFE4D3B5); // Warm border
 const kCard = Color(0xFFFFFFFF);
-const kDarkSurface = Color(0xFF0A2A66); // Royal blue
-const kAccentPink = Color(0xFF1E5FD6); // Bright sapphire blue
+const kDarkSurface = Color(0xFF241C13);
+const kAccentPink = Color(0xFFD94B78);
 
 // Booking time display settings.
 // This shows the whole business day instead of only a few fixed slots.
@@ -120,7 +120,7 @@ class FaithHairApp extends StatelessWidget {
         brightness: Brightness.light,
         colorScheme: const ColorScheme.light(
           primary: kPrimary,
-          onPrimary: Colors.white,
+          onPrimary: kInk,
           secondary: kInk,
           onSecondary: Colors.white,
           tertiary: kAccentPink,
@@ -148,7 +148,7 @@ class FaithHairApp extends StatelessWidget {
         ),
         navigationRailTheme: const NavigationRailThemeData(
           backgroundColor: kInk,
-          indicatorColor: Color(0xFF123C8C),
+          indicatorColor: kDarkSurface,
           selectedIconTheme: IconThemeData(color: kPrimary, size: 27),
           unselectedIconTheme: IconThemeData(color: Colors.white70, size: 24),
           selectedLabelTextStyle: TextStyle(
@@ -159,7 +159,7 @@ class FaithHairApp extends StatelessWidget {
         ),
         navigationBarTheme: const NavigationBarThemeData(
           backgroundColor: kInk,
-          indicatorColor: Color(0xFF123C8C),
+          indicatorColor: kDarkSurface,
           iconTheme: WidgetStatePropertyAll(
             IconThemeData(color: kPrimary),
           ),
@@ -170,7 +170,7 @@ class FaithHairApp extends StatelessWidget {
         cardTheme: CardThemeData(
           color: kCard,
           elevation: 2,
-          shadowColor: kPrimary.withValues(alpha: 0.16),
+          shadowColor: Colors.black.withValues(alpha: 0.08),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(22),
             side: const BorderSide(color: kBorder),
@@ -619,24 +619,12 @@ class HeroSection extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xFF04142F),
-            Color(0xFF082B6B),
-            Color(0xFF1552B5),
-          ],
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [kInk, kDarkSurface, kPrimaryDark],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: kPrimary.withValues(alpha: .28),
-            blurRadius: 28,
-            spreadRadius: 2,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: MaxWidth(
         child: Padding(
@@ -686,49 +674,19 @@ class _HeroCopy extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [
-                Color(0xFFFFE58A),
-                Color(0xFFD4AF37),
-                Color(0xFFFFF0A6),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: [
-              BoxShadow(
-                color: kPrimary.withValues(alpha: .30),
-                blurRadius: 18,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          child: const Text(
-            '✨ RIVERDALE BRAIDING STUDIO',
-            style: TextStyle(
-              color: kInk,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: .7,
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
         const Text(
           'Beautiful Braids, Twists & Natural Styles',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 38,
-            height: 1.04,
+            fontSize: 34,
+            height: 1.08,
             fontWeight: FontWeight.w900,
-            letterSpacing: -0.8,
+            letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         const Text(
-          'Riverdale, Maryland • Gentle hands • Clean parts • Polished finish',
+          'Riverdale, Maryland â€¢ Gentle hands â€¢ Clean parts â€¢ Polished finish',
           style: TextStyle(color: Colors.white70, fontSize: 16.5, height: 1.5),
         ),
         const SizedBox(height: 20),
@@ -759,86 +717,29 @@ class _HeroCopy extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFFFFE58A),
-                    Color(0xFFD4AF37),
-                    Color(0xFFFFF0A6),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: kPrimary.withValues(alpha: .38),
-                    blurRadius: 18,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: FilledButton.icon(
-                onPressed: onBookTap,
-                icon: const Icon(Icons.calendar_month_rounded),
-                label: const Text('Book Appointment'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: kInk,
-                  shadowColor: Colors.transparent,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-                ),
+            FilledButton.icon(
+              onPressed: onBookTap,
+              icon: const Icon(Icons.calendar_month_rounded),
+              label: const Text('Book Appointment'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: kInk,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               ),
             ),
-            FilledButton.icon(
+            OutlinedButton.icon(
               onPressed: () => openUrl('https://wa.me/$whatsappNumber'),
               icon: const Icon(Icons.chat_rounded),
               label: const Text('WhatsApp'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF25D366),
+              style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white70),
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        const Wrap(
-          spacing: 18,
-          runSpacing: 8,
-          children: [
-            _MiniTrust(icon: Icons.star_rounded, text: 'Luxury finish'),
-            _MiniTrust(icon: Icons.child_care_rounded, text: 'Kids friendly'),
-            _MiniTrust(icon: Icons.verified_user_rounded, text: 'Easy booking'),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _MiniTrust extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _MiniTrust({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox(width: 2),
-        Icon(icon, color: kPrimary, size: 18),
-        const SizedBox(width: 6),
-        Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 13,
-          ),
         ),
       ],
     );
@@ -854,23 +755,9 @@ class HeroInfoCard extends StatelessWidget {
       width: 340,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withValues(alpha: .18),
-            kPrimary.withValues(alpha: .10),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: kPrimary.withValues(alpha: .60), width: 1.1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .18),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white24),
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1047,13 +934,12 @@ class ServiceCard extends StatelessWidget {
         .toString();
 
     return Card(
-      elevation: 8,
-      shadowColor: kPrimary.withValues(alpha: .24),
+      elevation: 0,
       color: Colors.white,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(26),
-        side: const BorderSide(color: kPrimary, width: 1.15),
+        side: const BorderSide(color: kBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1102,7 +988,7 @@ class ServiceCard extends StatelessWidget {
                       ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 7),
-                        child: Text('•', style: TextStyle(color: kMuted)),
+                        child: Text('â€¢', style: TextStyle(color: kMuted)),
                       ),
                       Text(
                         duration,
@@ -1124,8 +1010,8 @@ class ServiceCard extends StatelessWidget {
                   Text(
                     price,
                     style: const TextStyle(
-                      color: kPrimaryDark,
-                      fontSize: 20,
+                      color: kPrimary,
+                      fontSize: 18,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -1135,13 +1021,8 @@ class ServiceCard extends StatelessWidget {
                     child: FilledButton(
                       onPressed: onBook,
                       style: FilledButton.styleFrom(
-                        backgroundColor: kInk,
-                        foregroundColor: kPrimary,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: const BorderSide(color: kPrimary),
-                        ),
+                        backgroundColor: kPrimary,
+                        foregroundColor: Colors.white,
                       ),
                       child: const Text('Book Now'),
                     ),
@@ -1322,8 +1203,7 @@ class GalleryCard extends StatelessWidget {
         .toString();
 
     return Card(
-      elevation: 8,
-      shadowColor: kPrimary.withValues(alpha: .24),
+      elevation: 0,
       color: Colors.white,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
@@ -2136,20 +2016,11 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
     if (serviceId == null) return 'Unknown service';
 
     try {
-      final result = await supabase
-          .from('services')
-          .select('name')
-          .eq('id', serviceId)
-          .limit(1);
+      final result =
+          await supabase.from('services').select('name').eq('id', serviceId);
 
-      if (result.isEmpty) {
-        return 'Service';
-      }
-
-      final service = Map<String, dynamic>.from(result.first);
-      return (service['name'] ?? 'Service').toString();
-    } catch (e) {
-      debugPrint('Could not load service name: $e');
+      return (result?['name'] ?? 'Service').toString();
+    } catch (_) {
       return 'Service';
     }
   }
@@ -2158,23 +2029,9 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
     dynamic bookingId,
     String status,
   ) async {
-    if (bookingId == null) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not update booking: missing booking ID.'),
-        ),
-      );
-      return;
-    }
-
     try {
-      debugPrint(
-        'Updating booking ID: $bookingId to status: $status',
-      );
-
-      final result = await supabase
+      // Update the booking status in Supabase.
+      final booking = await supabase
           .from('bookings')
           .update({
             'status': status,
@@ -2182,80 +2039,68 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
           .eq('id', bookingId)
           .select();
 
-      if (result.isEmpty) {
-        throw Exception(
-          'No booking was updated. Check the booking ID and Supabase update policy.',
-        );
-      }
-
-      final booking = Map<String, dynamic>.from(result.first);
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Booking marked $status.')),
       );
 
-      if (status != 'confirmed') {
-        return;
-      }
+      // Open WhatsApp with a prepared confirmation message.
+      if (status == 'confirmed') {
+        var phone = (booking['phone'] ?? '')
+            .toString()
+            .replaceAll(RegExp(r'[^0-9]'), '');
 
-      var phone =
-          (booking['phone'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
+        // Add the United States country code when a 10-digit number was saved.
+        if (phone.length == 10) {
+          phone = '1$phone';
+        }
 
-      if (phone.length == 10) {
-        phone = '1$phone';
-      }
-
-      if (phone.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Booking confirmed, but the customer has no phone number.',
+        if (phone.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Booking confirmed, but the customer has no phone number.',
+              ),
             ),
-          ),
+          );
+          return;
+        }
+
+        final customer = (booking['customer_name'] ?? 'Customer').toString();
+        final bookingDate = (booking['booking_date'] ?? '').toString();
+        final startTime = (booking['start_time'] ?? '').toString();
+
+        final message = Uri.encodeComponent(
+          'Hello $customer, your appointment at Faith Hair Style '
+          'for $bookingDate at $startTime has been confirmed. '
+          'We look forward to seeing you!',
         );
-        return;
-      }
 
-      final customer = (booking['customer_name'] ?? 'Customer').toString();
-      final bookingDate = (booking['booking_date'] ?? '').toString();
-      final startTime = (booking['start_time'] ?? '').toString();
+        final whatsappUri = Uri.parse(
+          'https://wa.me/$phone?text=$message',
+        );
 
-      final message = Uri.encodeComponent(
-        'Hello $customer, your appointment at Faith Hair Style '
-        'for $bookingDate at $startTime has been confirmed. '
-        'We look forward to seeing you!',
-      );
+        final opened = await launchUrl(
+          whatsappUri,
+          mode: LaunchMode.externalApplication,
+        );
 
-      final whatsappUri = Uri.parse(
-        'https://wa.me/$phone?text=$message',
-      );
-
-      final opened = await launchUrl(
-        whatsappUri,
-        mode: LaunchMode.externalApplication,
-      );
-
-      if (!opened && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Booking confirmed, but WhatsApp could not be opened.',
+        if (!opened && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Booking confirmed, but WhatsApp could not be opened.',
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
-    } catch (e, stackTrace) {
-      debugPrint('Booking update failed: $e');
-      debugPrintStack(stackTrace: stackTrace);
-
+    } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not update booking: $e'),
-        ),
+        SnackBar(content: Text('Could not update booking: $e')),
       );
     }
   }
@@ -2369,7 +2214,7 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                           icon: Icons.schedule_rounded,
                           text: start.isEmpty
                               ? 'No time'
-                              : '$start${end.isEmpty ? '' : ' – $end'}',
+                              : '$start${end.isEmpty ? '' : ' â€“ $end'}',
                         ),
                         if (phone.isNotEmpty)
                           _OwnerDetail(
@@ -2593,7 +2438,7 @@ class _OwnerInboxGatePageState extends State<OwnerInboxGatePage> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Owner access is private. Keep your PIN secure and do not display it publicly.',
+                    'Testing PIN: 1234. Change ownerChatPin in main.dart before sharing publicly.',
                     style: TextStyle(color: kMuted, height: 1.4),
                   ),
                 ],
@@ -3341,7 +3186,7 @@ class _BookingPageState extends State<BookingPage> {
                             return DropdownMenuItem<String>(
                               value: service['id'].toString(),
                               child: Text(
-                                '${service['name']} • ${formatPrice(service['price'])} • ${formatDuration(service['duration_minutes'])}',
+                                '${service['name']} â€¢ ${formatPrice(service['price'])} â€¢ ${formatDuration(service['duration_minutes'])}',
                                 overflow: TextOverflow.ellipsis,
                               ),
                             );
@@ -3396,7 +3241,7 @@ class _BookingPageState extends State<BookingPage> {
                               final name = color['name'].toString();
                               return DropdownMenuItem<String>(
                                 value: code,
-                                child: Text('$code • $name'),
+                                child: Text('$code â€¢ $name'),
                               );
                             }),
                           ],
@@ -3493,7 +3338,7 @@ class _BookingPageState extends State<BookingPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Choose start time • ${formatDuration(selectedServiceDurationMinutes())} service',
+                                'Choose start time â€¢ ${formatDuration(selectedServiceDurationMinutes())} service',
                                 style: const TextStyle(
                                   color: kMuted,
                                   fontWeight: FontWeight.w700,
@@ -3779,8 +3624,7 @@ class InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 8,
-      shadowColor: kPrimary.withValues(alpha: .24),
+      elevation: 0,
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),

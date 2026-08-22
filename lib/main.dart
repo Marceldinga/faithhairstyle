@@ -1,4 +1,7 @@
+﻿import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -13,16 +16,18 @@ const bookingUrl =
     'https://docs.google.com/forms/d/1vvAIeCi7BZ-kJJff-SzTskWn2u1kD3KBlDpwXl42SpY/viewform';
 
 // Faith Hair Style luxury business palette.
-const kPrimary = Color(0xFFD4A437); // Gold
-const kPrimaryDark = Color(0xFF8C6518); // Dark gold
-const kInk = Color(0xFF17130F); // Luxury black
-const kMuted = Color(0xFF756A5E); // Warm muted text
-const kSurface = Color(0xFFFFF8EE); // Cream background
-const kSoftPink = Color(0xFFF4E7C8); // Soft gold/cream highlight
-const kBorder = Color(0xFFE4D3B5); // Warm border
+const kPrimary = Color(0xFFE4AD16); // Shining salon gold
+const kPrimaryDark = Color(0xFF9A6800); // Deep gold
+const kInk = Color(0xFF071A42); // Luxury navy
+const kMuted = Color(0xFF667085); // Clean readable gray
+const kSurface = Color(0xFFF5F8FF); // Cool premium surface
+const kSoftPink = Color(0xFFFFE9A8); // Champagne gold highlight
+const kBorder = Color(0xFFD8B649); // Gold border
 const kCard = Color(0xFFFFFFFF);
-const kDarkSurface = Color(0xFF241C13);
-const kAccentPink = Color(0xFFD94B78);
+const kDarkSurface = Color(0xFF0A2D6E);
+const kAccentPink = Color(0xFFB83B68);
+const kRoyalBlue = Color(0xFF0754AD);
+const kRoyalBlueBright = Color(0xFF1477DE);
 
 // Booking time display settings.
 // This shows the whole business day instead of only a few fixed slots.
@@ -120,7 +125,7 @@ class FaithHairApp extends StatelessWidget {
         brightness: Brightness.light,
         colorScheme: const ColorScheme.light(
           primary: kPrimary,
-          onPrimary: kInk,
+          onPrimary: Colors.white,
           secondary: kInk,
           onSecondary: Colors.white,
           tertiary: kAccentPink,
@@ -135,7 +140,7 @@ class FaithHairApp extends StatelessWidget {
         appBarTheme: const AppBarTheme(
           elevation: 0,
           scrolledUnderElevation: 0,
-          backgroundColor: kCard,
+          backgroundColor: kSurface,
           foregroundColor: kInk,
           centerTitle: false,
           iconTheme: IconThemeData(color: kPrimaryDark),
@@ -148,11 +153,11 @@ class FaithHairApp extends StatelessWidget {
         ),
         navigationRailTheme: const NavigationRailThemeData(
           backgroundColor: kInk,
-          indicatorColor: kDarkSurface,
-          selectedIconTheme: IconThemeData(color: kPrimary, size: 27),
+          indicatorColor: kPrimary,
+          selectedIconTheme: IconThemeData(color: Colors.white, size: 27),
           unselectedIconTheme: IconThemeData(color: Colors.white70, size: 24),
           selectedLabelTextStyle: TextStyle(
-            color: kPrimary,
+            color: Colors.white,
             fontWeight: FontWeight.w800,
           ),
           unselectedLabelTextStyle: TextStyle(color: Colors.white70),
@@ -179,7 +184,7 @@ class FaithHairApp extends StatelessWidget {
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             backgroundColor: kPrimary,
-            foregroundColor: kInk,
+            foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
@@ -215,7 +220,7 @@ class FaithHairApp extends StatelessWidget {
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: kPrimary,
-          foregroundColor: kInk,
+          foregroundColor: Colors.white,
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
@@ -553,12 +558,16 @@ class BusinessAppBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(88);
 
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 760;
     return AppBar(
-      titleSpacing: 18,
+      toolbarHeight: 88,
+      backgroundColor: kRoyalBlue,
+      foregroundColor: Colors.white,
+      titleSpacing: wide ? 28 : 14,
       title: Row(
         children: [
           Tooltip(
@@ -566,34 +575,39 @@ class BusinessAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: GestureDetector(
               onLongPress: () => openPrivateOwnerDashboard(context),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(40),
                 child: Image.asset(
                   'assets/icon/app_icon.png',
-                  width: 36,
-                  height: 36,
+                  width: 58,
+                  height: 58,
                   fit: BoxFit.cover,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              title,
-              overflow: TextOverflow.ellipsis,
-            ),
+          const SizedBox(width: 14),
+          Flexible(child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+              if (wide) const Text('RIVERDALE, MARYLAND',
+                style: TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 2.2)),
+            ],
+          ),
           ),
         ],
       ),
       actions: [
         IconButton(
           tooltip: 'Instagram',
-          icon: const Icon(Icons.camera_alt_rounded),
+          icon: const Icon(Icons.camera_alt_rounded, color: kPrimary),
           onPressed: () => openUrl(instagramUrl),
         ),
         IconButton(
           tooltip: 'TikTok',
-          icon: const Icon(Icons.music_note_rounded),
+          icon: const Icon(Icons.music_note_rounded, color: kPrimary),
           onPressed: () => openUrl(tiktokUrl),
         ),
         ...extraActions,
@@ -603,7 +617,7 @@ class BusinessAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class HeroSection extends StatelessWidget {
+class HeroSection extends StatefulWidget {
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onBookTap;
 
@@ -614,48 +628,74 @@ class HeroSection extends StatelessWidget {
   });
 
   @override
+  State<HeroSection> createState() => _HeroSectionState();
+}
+
+class _HeroSectionState extends State<HeroSection> {
+  late final Future<String?> heroImageFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    heroImageFuture = loadHeroImage();
+  }
+
+  Future<String?> loadHeroImage() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('services')
+          .select('image_url')
+          .eq('is_active', true)
+          .limit(12);
+      for (final row in List<Map<String, dynamic>>.from(rows)) {
+        final url = (row['image_url'] ?? '').toString().trim();
+        if (url.isNotEmpty) return url;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final wideScreen = MediaQuery.sizeOf(context).width >= 850;
-
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [kInk, kDarkSurface, kPrimaryDark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: MaxWidth(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 34, 18, 34),
-          child: wideScreen
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: _HeroCopy(
-                        onSearchChanged: onSearchChanged,
-                        onBookTap: onBookTap,
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    const HeroInfoCard(),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _HeroCopy(
-                      onSearchChanged: onSearchChanged,
-                      onBookTap: onBookTap,
-                    ),
-                    const SizedBox(height: 18),
-                    const HeroInfoCard(),
-                  ],
+    return FutureBuilder<String?>(
+      future: heroImageFuture,
+      builder: (context, snapshot) {
+        final imageUrl = snapshot.data;
+        return Container(
+          width: double.infinity,
+          constraints: BoxConstraints(minHeight: wideScreen ? 650 : 610),
+          decoration: BoxDecoration(
+            color: kInk,
+            image: imageUrl == null ? null : DecorationImage(
+              image: NetworkImage(imageUrl), fit: BoxFit.cover,
+              colorFilter: const ColorFilter.mode(Color(0x33071A42), BlendMode.darken),
+            ),
+          ),
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xA6071A42), Color(0x520A3C86), Color(0x8C071A42)],
+                begin: Alignment.centerLeft, end: Alignment.centerRight,
+              ),
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: wideScreen ? 42 : 18, vertical: wideScreen ? 72 : 42),
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 1450),
+                  padding: EdgeInsets.all(wideScreen ? 42 : 22),
+                  decoration: BoxDecoration(border: Border.all(color: kPrimary.withValues(alpha: .55))),
+                  child: _HeroCopy(
+                    onSearchChanged: widget.onSearchChanged,
+                    onBookTap: widget.onBookTap,
+                  ),
                 ),
-        ),
-      ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -671,75 +711,77 @@ class _HeroCopy extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 850;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Text(
-          'Beautiful Braids, Twists & Natural Styles',
+        const Text('PROTECTIVE STYLES • RIVERDALE, MARYLAND',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: kPrimary, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 3.2)),
+        const SizedBox(height: 22),
+        Text(
+          'Beautiful hair.\nMade for you.',
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.white,
-            fontSize: 34,
-            height: 1.08,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.5,
+            fontSize: wide ? 82 : 48,
+            height: 1.0,
+            fontFamily: 'serif',
+            fontWeight: FontWeight.w700,
+            letterSpacing: -1.5,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 22),
         const Text(
-          'Riverdale, Maryland • Gentle hands • Clean parts • Polished finish',
-          style: TextStyle(color: Colors.white70, fontSize: 16.5, height: 1.5),
+          'Neat parts, gentle hands, and beautiful protective styles.\nChoose your style, then request your appointment.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white, fontSize: 18, height: 1.55),
         ),
-        const SizedBox(height: 20),
-        TextField(
-          onChanged: onSearchChanged,
-          textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-            filled: true,
-            fillColor: Colors.white,
-            prefixIcon: Icon(Icons.search_rounded),
-            hintText: 'Search knotless, cornrows, kids, twists...',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(22)),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(22)),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(22)),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 30),
         Wrap(
+          alignment: WrapAlignment.center,
           spacing: 10,
           runSpacing: 10,
           children: [
             FilledButton.icon(
               onPressed: onBookTap,
               icon: const Icon(Icons.calendar_month_rounded),
-              label: const Text('Book Appointment'),
+              label: const Text('BOOK YOUR APPOINTMENT  →'),
               style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
+                backgroundColor: kPrimary,
                 foregroundColor: kInk,
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 19),
               ),
             ),
             OutlinedButton.icon(
               onPressed: () => openUrl('https://wa.me/$whatsappNumber'),
               icon: const Icon(Icons.chat_rounded),
-              label: const Text('WhatsApp'),
+              label: const Text('WHATSAPP'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white70),
+                side: const BorderSide(color: kPrimary, width: 2),
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 28),
+        SizedBox(
+          width: wide ? 680 : double.infinity,
+          child: TextField(
+            onChanged: onSearchChanged,
+            textInputAction: TextInputAction.search,
+            decoration: const InputDecoration(
+              filled: true, fillColor: Colors.white,
+              prefixIcon: Icon(Icons.search_rounded),
+              hintText: 'Search braids, cornrows, kids styles, twists...',
+              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: kPrimary, width: 2)),
+            ),
+          ),
         ),
       ],
     );
@@ -755,9 +797,16 @@ class HeroInfoCard extends StatelessWidget {
       width: 340,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .14),
+        color: const Color(0xFF4B3621).withValues(alpha: .96),
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: Colors.white24),
+        border: Border.all(color: kPrimary.withValues(alpha: .55)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .20),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -902,7 +951,7 @@ class ServicesGrid extends StatelessWidget {
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 18,
             mainAxisSpacing: 18,
-            mainAxisExtent: 418,
+            mainAxisExtent: 458,
           ),
           itemBuilder: (_, i) {
             return ServiceCard(
@@ -944,14 +993,16 @@ class ServiceCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: 178,
+          Container(
+            height: 218,
             width: double.infinity,
+            color: const Color(0xFFFFF4D3),
             child: image.isNotEmpty
                 ? Image.network(
                     image,
                     width: double.infinity,
-                    fit: BoxFit.cover,
+                    height: 218,
+                    fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => const ServicePlaceholder(),
                   )
                 : const ServicePlaceholder(),
@@ -1213,12 +1264,15 @@ class GalleryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            height: 196,
+          Container(
+            height: 226,
             width: double.infinity,
+            color: const Color(0xFFFFF4D3),
             child: Image.network(
               image,
-              fit: BoxFit.cover,
+              width: double.infinity,
+              height: 226,
+              fit: BoxFit.contain,
               errorBuilder: (_, __, ___) => const ServicePlaceholder(),
             ),
           ),
@@ -1969,7 +2023,7 @@ class OwnerDashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: kInk,
@@ -1988,6 +2042,10 @@ class OwnerDashboardPage extends StatelessWidget {
                 icon: Icon(Icons.forum_rounded),
                 text: 'Messages',
               ),
+              Tab(
+                icon: Icon(Icons.campaign_rounded),
+                text: 'Marketing',
+              ),
             ],
           ),
         ),
@@ -1995,8 +2053,336 @@ class OwnerDashboardPage extends StatelessWidget {
           children: [
             OwnerBookingsPage(),
             OwnerChatInboxPage(embedded: true),
+            OwnerMarketingPage(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class OwnerMarketingPage extends StatefulWidget {
+  const OwnerMarketingPage({super.key});
+
+  @override
+  State<OwnerMarketingPage> createState() => _OwnerMarketingPageState();
+}
+
+class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
+  final supabase = Supabase.instance.client;
+  final promotionController = TextEditingController();
+  final bookingLinkController = TextEditingController(text: bookingUrl);
+
+  List<Map<String, dynamic>> services = [];
+  List<Map<String, dynamic>> history = [];
+  String? selectedServiceId;
+  String platform = 'Instagram & Facebook';
+  String frequency = '3 times a week';
+  TimeOfDay postTime = const TimeOfDay(hour: 10, minute: 0);
+  bool approvalRequired = true;
+  bool automationEnabled = false;
+  bool loading = true;
+  bool saving = false;
+  String generatedPost = '';
+
+  @override
+  void initState() {
+    super.initState();
+    loadMarketingData();
+  }
+
+  @override
+  void dispose() {
+    promotionController.dispose();
+    bookingLinkController.dispose();
+    super.dispose();
+  }
+
+  Future<void> loadMarketingData() async {
+    try {
+      final results = await Future.wait([
+        supabase.from('services').select().eq('is_active', true).order('name'),
+        supabase
+            .from('marketing_posts')
+            .select()
+            .order('created_at', ascending: false)
+            .limit(20),
+        supabase.from('marketing_settings').select().eq('id', 1).maybeSingle(),
+      ]);
+
+      final loadedServices = List<Map<String, dynamic>>.from(results[0] as List);
+      final loadedHistory = List<Map<String, dynamic>>.from(results[1] as List);
+      final settings = results[2] as Map<String, dynamic>?;
+
+      if (!mounted) return;
+      setState(() {
+        services = loadedServices;
+        history = loadedHistory;
+        selectedServiceId = services.isEmpty ? null : services.first['id'].toString();
+        if (settings != null) {
+          platform = settings['platform']?.toString() ?? platform;
+          frequency = settings['frequency']?.toString() ?? frequency;
+          approvalRequired = settings['approval_required'] as bool? ?? true;
+          automationEnabled = settings['automation_enabled'] as bool? ?? false;
+          final parts = (settings['post_time']?.toString() ?? '10:00').split(':');
+          postTime = TimeOfDay(
+            hour: int.tryParse(parts.first) ?? 10,
+            minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+          );
+        }
+        loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Create the marketing tables in Supabase to save schedules and posts.'),
+        ),
+      );
+    }
+  }
+
+  Map<String, dynamic>? get selectedService {
+    for (final service in services) {
+      if (service['id'].toString() == selectedServiceId) return service;
+    }
+    return services.isEmpty ? null : services.first;
+  }
+
+  String createPost() {
+    final service = selectedService;
+    final name = service?['name']?.toString() ?? 'beautiful protective styles';
+    final price = service == null ? '' : ' starting at ${formatPrice(service['price'])}';
+    final promotion = promotionController.text.trim();
+    final extras = promotion.isEmpty ? '' : '\n\n✨ $promotion';
+    final openings = [
+      'Your next beautiful look is waiting ✨',
+      'Fresh hair, fresh confidence ✨',
+      'Ready for a neat protective style? 💛',
+      'Let Faith Hair Style bring your vision to life ✨',
+    ];
+    final opening = openings[Random().nextInt(openings.length)];
+    return '$opening\n\nBook $name$price with Faith Hair Style in Riverdale, Maryland.$extras\n\nChoose your appointment online, check your email for confirmation, and send a picture of the style you want through WhatsApp.\n\nBook now: ${bookingLinkController.text.trim()}\n\n#FaithHairStyle #RiverdaleMD #MarylandBraider #ProtectiveStyles #Braids';
+  }
+
+  void generatePreview() {
+    setState(() => generatedPost = createPost());
+  }
+
+  Future<void> copyPost() async {
+    if (generatedPost.isEmpty) generatePreview();
+    final text = generatedPost.isEmpty ? createPost() : generatedPost;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Marketing post copied.')),
+    );
+  }
+
+  Future<void> saveDraft() async {
+    final content = generatedPost.isEmpty ? createPost() : generatedPost;
+    setState(() => saving = true);
+    try {
+      await supabase.from('marketing_posts').insert({
+        'service_id': selectedService?['id']?.toString(),
+        'platform': platform,
+        'content': content,
+        'status': approvalRequired ? 'pending' : 'approved',
+        'scheduled_for': null,
+      });
+      if (!mounted) return;
+      setState(() => generatedPost = content);
+      await loadMarketingData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Marketing post saved.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save post: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> saveAutomation() async {
+    setState(() => saving = true);
+    try {
+      await supabase.from('marketing_settings').upsert({
+        'id': 1,
+        'automation_enabled': automationEnabled,
+        'approval_required': approvalRequired,
+        'platform': platform,
+        'frequency': frequency,
+        'post_time': '${postTime.hour.toString().padLeft(2, '0')}:${postTime.minute.toString().padLeft(2, '0')}:00',
+        'booking_link': bookingLinkController.text.trim(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(automationEnabled
+              ? 'Marketing automation settings saved.'
+              : 'Marketing automation is paused.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save settings: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> chooseTime() async {
+    final selected = await showTimePicker(context: context, initialTime: postTime);
+    if (selected != null) setState(() => postTime = selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const Center(child: CircularProgressIndicator());
+
+    return RefreshIndicator(
+      onRefresh: loadMarketingData,
+      child: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          MaxWidth(
+            width: 980,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Automated Marketing', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 6),
+                const Text('Create, approve, schedule, and track Faith Hair Style promotions.', style: TextStyle(color: kMuted)),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      children: [
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Marketing automation', style: TextStyle(fontWeight: FontWeight.w800)),
+                          subtitle: Text(automationEnabled ? 'Automation is active' : 'Automation is paused'),
+                          value: automationEnabled,
+                          onChanged: (value) => setState(() => automationEnabled = value),
+                        ),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Require approval before posting'),
+                          subtitle: const Text('Recommended while testing the system.'),
+                          value: approvalRequired,
+                          onChanged: (value) => setState(() => approvalRequired = value),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          initialValue: platform,
+                          decoration: const InputDecoration(labelText: 'Platform', prefixIcon: Icon(Icons.public_rounded)),
+                          items: const ['Instagram & Facebook', 'Instagram', 'Facebook'].map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
+                          onChanged: (value) => setState(() => platform = value ?? platform),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: frequency,
+                          decoration: const InputDecoration(labelText: 'Posting frequency', prefixIcon: Icon(Icons.repeat_rounded)),
+                          items: const ['Every day', '3 times a week', 'Once a week'].map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
+                          onChanged: (value) => setState(() => frequency = value ?? frequency),
+                        ),
+                        const SizedBox(height: 12),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.schedule_rounded, color: kPrimary),
+                          title: const Text('Posting time'),
+                          subtitle: Text(postTime.format(context)),
+                          trailing: OutlinedButton(onPressed: chooseTime, child: const Text('Change')),
+                        ),
+                        TextField(
+                          controller: bookingLinkController,
+                          decoration: const InputDecoration(labelText: 'Booking link', prefixIcon: Icon(Icons.link_rounded)),
+                        ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: saving ? null : saveAutomation,
+                            icon: const Icon(Icons.save_rounded),
+                            label: const Text('Save automation settings'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Create a campaign', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 14),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedServiceId,
+                          decoration: const InputDecoration(labelText: 'Service to promote', prefixIcon: Icon(Icons.auto_awesome_rounded)),
+                          items: services.map((service) => DropdownMenuItem(value: service['id'].toString(), child: Text(service['name']?.toString() ?? 'Service'))).toList(),
+                          onChanged: (value) => setState(() => selectedServiceId = value),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: promotionController,
+                          maxLines: 2,
+                          decoration: const InputDecoration(labelText: 'Optional promotion', hintText: 'Example: \$20 off appointments booked this week', prefixIcon: Icon(Icons.local_offer_rounded)),
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            FilledButton.icon(onPressed: generatePreview, icon: const Icon(Icons.auto_awesome_rounded), label: const Text('Generate post')),
+                            OutlinedButton.icon(onPressed: copyPost, icon: const Icon(Icons.copy_rounded), label: const Text('Copy')),
+                            OutlinedButton.icon(onPressed: saving ? null : saveDraft, icon: const Icon(Icons.save_alt_rounded), label: const Text('Save draft')),
+                          ],
+                        ),
+                        if (generatedPost.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+                            child: SelectableText(generatedPost, style: const TextStyle(height: 1.5)),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text('Recent marketing posts', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                if (history.isEmpty)
+                  const EmptyState(icon: Icons.campaign_outlined, title: 'No marketing posts yet', message: 'Generate and save your first campaign above.')
+                else
+                  ...history.map((post) => Card(
+                        child: ListTile(
+                          leading: const CircleAvatar(backgroundColor: kSoftPink, child: Icon(Icons.campaign_rounded, color: kPrimaryDark)),
+                          title: Text(post['platform']?.toString() ?? 'Marketing post'),
+                          subtitle: Text(post['content']?.toString() ?? '', maxLines: 3, overflow: TextOverflow.ellipsis),
+                          trailing: Chip(label: Text(post['status']?.toString() ?? 'draft')),
+                        ),
+                      )),
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2020,10 +2406,16 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
           .from('services')
           .select('name')
           .eq('id', serviceId)
-          .maybeSingle();
+          .limit(1);
 
-      return (result?['name'] ?? 'Service').toString();
-    } catch (_) {
+      if (result.isEmpty) {
+        return 'Service';
+      }
+
+      final service = Map<String, dynamic>.from(result.first);
+      return (service['name'] ?? 'Service').toString();
+    } catch (e) {
+      debugPrint('Could not load service name: $e');
       return 'Service';
     }
   }
@@ -2032,16 +2424,37 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
     dynamic bookingId,
     String status,
   ) async {
+    if (bookingId == null) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not update booking: missing booking ID.'),
+        ),
+      );
+      return;
+    }
+
     try {
-      // Update the booking status in Supabase.
-      final booking = await supabase
+      debugPrint(
+        'Updating booking ID: $bookingId to status: $status',
+      );
+
+      final result = await supabase
           .from('bookings')
           .update({
             'status': status,
           })
           .eq('id', bookingId)
-          .select()
-          .single();
+          .select();
+
+      if (result.isEmpty) {
+        throw Exception(
+          'No booking was updated. Check the booking ID and Supabase update policy.',
+        );
+      }
+
+      final booking = Map<String, dynamic>.from(result.first);
 
       if (!mounted) return;
 
@@ -2049,62 +2462,66 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
         SnackBar(content: Text('Booking marked $status.')),
       );
 
-      // Open WhatsApp with a prepared confirmation message.
-      if (status == 'confirmed') {
-        var phone = (booking['phone'] ?? '')
-            .toString()
-            .replaceAll(RegExp(r'[^0-9]'), '');
-
-        // Add the United States country code when a 10-digit number was saved.
-        if (phone.length == 10) {
-          phone = '1$phone';
-        }
-
-        if (phone.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Booking confirmed, but the customer has no phone number.',
-              ),
-            ),
-          );
-          return;
-        }
-
-        final customer = (booking['customer_name'] ?? 'Customer').toString();
-        final bookingDate = (booking['booking_date'] ?? '').toString();
-        final startTime = (booking['start_time'] ?? '').toString();
-
-        final message = Uri.encodeComponent(
-          'Hello $customer, your appointment at Faith Hair Style '
-          'for $bookingDate at $startTime has been confirmed. '
-          'We look forward to seeing you!',
-        );
-
-        final whatsappUri = Uri.parse(
-          'https://wa.me/$phone?text=$message',
-        );
-
-        final opened = await launchUrl(
-          whatsappUri,
-          mode: LaunchMode.externalApplication,
-        );
-
-        if (!opened && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Booking confirmed, but WhatsApp could not be opened.',
-              ),
-            ),
-          );
-        }
+      if (status != 'confirmed') {
+        return;
       }
-    } catch (e) {
+
+      var phone =
+          (booking['phone'] ?? '').toString().replaceAll(RegExp(r'[^0-9]'), '');
+
+      if (phone.length == 10) {
+        phone = '1$phone';
+      }
+
+      if (phone.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Booking confirmed, but the customer has no phone number.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final customer = (booking['customer_name'] ?? 'Customer').toString();
+      final bookingDate = (booking['booking_date'] ?? '').toString();
+      final startTime = (booking['start_time'] ?? '').toString();
+
+      final message = Uri.encodeComponent(
+        'Hello $customer, your appointment at Faith Hair Style '
+        'for $bookingDate at $startTime has been confirmed. '
+        'We look forward to seeing you!',
+      );
+
+      final whatsappUri = Uri.parse(
+        'https://wa.me/$phone?text=$message',
+      );
+
+      final opened = await launchUrl(
+        whatsappUri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Booking confirmed, but WhatsApp could not be opened.',
+            ),
+          ),
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Booking update failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update booking: $e')),
+        SnackBar(
+          content: Text('Could not update booking: $e'),
+        ),
       );
     }
   }
@@ -2442,7 +2859,7 @@ class _OwnerInboxGatePageState extends State<OwnerInboxGatePage> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Testing PIN: 1234. Change ownerChatPin in main.dart before sharing publicly.',
+                    'Owner access is private. Keep your PIN secure and do not display it publicly.',
                     style: TextStyle(color: kMuted, height: 1.4),
                   ),
                 ],
