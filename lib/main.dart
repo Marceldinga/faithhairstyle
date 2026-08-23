@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 
 const supabaseUrl = 'https://lowqtmndtkgwmnyhqszp.supabase.co';
 const supabaseAnonKey =
@@ -14,6 +15,8 @@ const instagramUrl = 'https://www.instagram.com/faith_styl_/';
 const tiktokUrl = 'https://www.tiktok.com/@nfor.ako';
 const bookingUrl =
     'https://docs.google.com/forms/d/1vvAIeCi7BZ-kJJff-SzTskWn2u1kD3KBlDpwXl42SpY/viewform';
+const heroVideoUrl =
+    'https://lowqtmndtkgwmnyhqszp.supabase.co/storage/v1/object/public/faith-videos/faith-hairstyle-hero.mp4';
 
 // Faith Hair Style luxury business palette.
 const kPrimary = Color(0xFFE4AD16); // Shining salon gold
@@ -633,11 +636,36 @@ class HeroSection extends StatefulWidget {
 
 class _HeroSectionState extends State<HeroSection> {
   late final Future<String?> heroImageFuture;
+  late final VideoPlayerController videoController;
+  bool videoReady = false;
 
   @override
   void initState() {
     super.initState();
     heroImageFuture = loadHeroImage();
+    videoController = VideoPlayerController.networkUrl(
+      Uri.parse(heroVideoUrl),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
+    initializeVideo();
+  }
+
+  Future<void> initializeVideo() async {
+    try {
+      await videoController.initialize();
+      await videoController.setVolume(0);
+      await videoController.setLooping(true);
+      await videoController.play();
+      if (mounted) setState(() => videoReady = true);
+    } catch (_) {
+      // Keep the Supabase service image as the hero fallback.
+    }
+  }
+
+  @override
+  void dispose() {
+    videoController.dispose();
+    super.dispose();
   }
 
   Future<String?> loadHeroImage() async {
@@ -665,34 +693,59 @@ class _HeroSectionState extends State<HeroSection> {
         return Container(
           width: double.infinity,
           constraints: BoxConstraints(minHeight: wideScreen ? 650 : 610),
-          decoration: BoxDecoration(
-            color: kInk,
-            image: imageUrl == null ? null : DecorationImage(
-              image: NetworkImage(imageUrl), fit: BoxFit.cover,
-              colorFilter: const ColorFilter.mode(Color(0x33071A42), BlendMode.darken),
-            ),
-          ),
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xA6071A42), Color(0x520A3C86), Color(0x8C071A42)],
-                begin: Alignment.centerLeft, end: Alignment.centerRight,
+          color: kInk,
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: [
+              Positioned.fill(
+                child: imageUrl == null
+                    ? Container(color: kInk)
+                    : Image.network(imageUrl, fit: BoxFit.cover),
               ),
-            ),
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: wideScreen ? 42 : 18, vertical: wideScreen ? 72 : 42),
-              child: Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 1450),
-                  padding: EdgeInsets.all(wideScreen ? 42 : 22),
-                  decoration: BoxDecoration(border: Border.all(color: kPrimary.withValues(alpha: .55))),
-                  child: _HeroCopy(
-                    onSearchChanged: widget.onSearchChanged,
-                    onBookTap: widget.onBookTap,
+              if (videoReady)
+                Positioned.fill(
+                  child: ClipRect(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: videoController.value.size.width,
+                        height: videoController.value.size.height,
+                        child: VideoPlayer(videoController),
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xA6071A42), Color(0x520A3C86), Color(0x8C071A42)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
                   ),
                 ),
               ),
-            ),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: wideScreen ? 42 : 18,
+                  vertical: wideScreen ? 72 : 42,
+                ),
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 1450),
+                    padding: EdgeInsets.all(wideScreen ? 42 : 22),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: kPrimary.withValues(alpha: .55)),
+                    ),
+                    child: _HeroCopy(
+                      onSearchChanged: widget.onSearchChanged,
+                      onBookTap: widget.onBookTap,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -2153,7 +2206,9 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
   String createPost() {
     final service = selectedService;
     final name = service?['name']?.toString() ?? 'beautiful protective styles';
-    final price = service == null ? '' : ' starting at ${formatPrice(service['price'])}';
+    final price = service == null
+        ? ''
+        : ' starting at ${formatPrice(service['price']).replaceFirst('From ', '')}';
     final promotion = promotionController.text.trim();
     final extras = promotion.isEmpty ? '' : '\n\n✨ $promotion';
     final openings = [
