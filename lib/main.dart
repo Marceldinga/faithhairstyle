@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
@@ -18,6 +20,7 @@ const bookingUrl =
     'https://docs.google.com/forms/d/1vvAIeCi7BZ-kJJff-SzTskWn2u1kD3KBlDpwXl42SpY/viewform';
 const heroVideoUrl =
     'https://lowqtmndtkgwmnyhqszp.supabase.co/storage/v1/object/public/faith-videos/faith-hairstyle-hero.mp4';
+const dinMaxAiUrl = 'https://dinmax-ai-production.up.railway.app/chat';
 
 // Faith Hair Style luxury business palette.
 const kPrimary = Color(0xFFE4AD16); // Shining salon gold
@@ -354,7 +357,7 @@ class _MainPageState extends State<MainPage> {
       case 1:
         return GalleryPage(onBook: goToBooking);
       case 2:
-        return const AiPage();
+        return AiPage(onBook: goToBooking);
       case 3:
         return BookingPage(initialService: selectedService);
       case 4:
@@ -373,7 +376,10 @@ class _MainPageState extends State<MainPage> {
   Widget build(BuildContext context) {
     final wideScreen = MediaQuery.sizeOf(context).width >= 950;
 
-    return Scaffold(
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Scaffold(
       body: Row(
         children: [
           if (wideScreen)
@@ -414,6 +420,13 @@ class _MainPageState extends State<MainPage> {
               onDestinationSelected: (i) => setState(() => page = i),
               destinations: bottomDestinations,
             ),
+          ),
+        ),
+        FaithAICopilotFloating(
+          onBook: goToBooking,
+          bottomOffset: wideScreen ? 18 : 92,
+        ),
+      ],
     );
   }
 }
@@ -814,6 +827,17 @@ class _HeroCopy extends StatelessWidget {
               onPressed: () => openUrl('https://wa.me/$whatsappNumber'),
               icon: const Icon(Icons.chat_rounded),
               label: const Text('WHATSAPP'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: kPrimary, width: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 26, vertical: 18),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => openUrl('tel:+13015419875'),
+              icon: const Icon(Icons.call_rounded),
+              label: const Text('CALL +1 301-541-9875'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 side: const BorderSide(color: kPrimary, width: 2),
@@ -1844,43 +1868,212 @@ class GalleryCard extends StatelessWidget {
   }
 }
 
-class AiPage extends StatefulWidget {
-  const AiPage({super.key});
+
+class AiPage extends StatelessWidget {
+  final ValueChanged<Map<String, dynamic>> onBook;
+
+  const AiPage({
+    super.key,
+    required this.onBook,
+  });
 
   @override
-  State<AiPage> createState() => _AiPageState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: const BusinessAppBar(title: 'Faith AI Copilot'),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: FaithAICopilotPanel(
+              onBook: onBook,
+              fullPage: true,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _AiPageState extends State<AiPage> {
+class FaithAICopilotFloating extends StatefulWidget {
+  final ValueChanged<Map<String, dynamic>> onBook;
+  final double bottomOffset;
+
+  const FaithAICopilotFloating({
+    super.key,
+    required this.onBook,
+    this.bottomOffset = 18,
+  });
+
+  @override
+  State<FaithAICopilotFloating> createState() =>
+      _FaithAICopilotFloatingState();
+}
+
+class _FaithAICopilotFloatingState extends State<FaithAICopilotFloating> {
+  bool open = false;
+  bool minimized = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final panelWidth = min(430.0, max(300.0, screen.width - 24));
+    final panelHeight = min(650.0, max(460.0, screen.height - 120));
+
+    return Positioned(
+      right: 12,
+      bottom: widget.bottomOffset,
+      child: SafeArea(
+        child: Material(
+          color: Colors.transparent,
+          child: Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              Offstage(
+                offstage: !open || minimized,
+                child: SizedBox(
+                  width: panelWidth,
+                  height: panelHeight,
+                  child: FaithAICopilotPanel(
+                    onBook: (service) {
+                      widget.onBook(service);
+                      setState(() {
+                        open = false;
+                        minimized = false;
+                      });
+                    },
+                    onMinimize: () => setState(() => minimized = true),
+                    onClose: () => setState(() {
+                      open = false;
+                      minimized = false;
+                    }),
+                  ),
+                ),
+              ),
+              if (!open || minimized)
+                InkWell(
+                  onTap: () => setState(() {
+                    open = true;
+                    minimized = false;
+                  }),
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 58),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [kInk, kRoyalBlue],
+                      ),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: kPrimary, width: 1.4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: .22),
+                          blurRadius: 22,
+                          offset: const Offset(0, 9),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircleAvatar(
+                          radius: 19,
+                          backgroundColor: kPrimary,
+                          child: Icon(
+                            Icons.auto_awesome_rounded,
+                            color: kInk,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Faith AI',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              open ? 'Continue your chat' : 'Ask your salon copilot',
+                              style: const TextStyle(
+                                color: Color(0xFFFFD761),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class FaithAICopilotPanel extends StatefulWidget {
+  final ValueChanged<Map<String, dynamic>> onBook;
+  final VoidCallback? onMinimize;
+  final VoidCallback? onClose;
+  final bool fullPage;
+
+  const FaithAICopilotPanel({
+    super.key,
+    required this.onBook,
+    this.onMinimize,
+    this.onClose,
+    this.fullPage = false,
+  });
+
+  @override
+  State<FaithAICopilotPanel> createState() => _FaithAICopilotPanelState();
+}
+
+class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
+  final supabase = Supabase.instance.client;
   final input = TextEditingController();
   final scrollController = ScrollController();
-  List<Map<String, dynamic>> services = [];
 
   final messages = <Map<String, String>>[
     {
       'bot':
-          'Hi! Welcome to Faith Hair Style. I can help you choose a style, check starting prices, and book your appointment.'
+          'Hi! I’m Faith AI, your salon copilot. Tell me the style you want, your budget, preferred length, or when you want to come in. I’ll help you narrow it down and get ready to book.'
     }
   ];
+
+  List<Map<String, dynamic>> services = [];
+  List<Map<String, dynamic>> hairColors = [];
+  List<Map<String, dynamic>> availabilitySlots = [];
+  List<Map<String, dynamic>> safeBookings = [];
+
+  bool loadingData = true;
+  bool aiThinking = false;
+  bool showBookingAction = false;
+  String? lastSuggestedService;
+
+  String? rememberedBudget;
+  String? rememberedLength;
+  String? rememberedSize;
+  String? rememberedColor;
+  String? rememberedOccasion;
+  String? rememberedDatePreference;
 
   @override
   void initState() {
     super.initState();
-    loadServices();
-  }
-
-  Future<void> loadServices() async {
-    try {
-      final result = await Supabase.instance.client
-          .from('services')
-          .select()
-          .eq('is_active', true)
-          .order('price', ascending: true);
-      if (!mounted) return;
-      setState(() => services = List<Map<String, dynamic>>.from(result));
-    } catch (_) {
-      // Keep the assistant available even if services cannot load.
-    }
+    loadCopilotData();
   }
 
   @override
@@ -1890,262 +2083,891 @@ class _AiPageState extends State<AiPage> {
     super.dispose();
   }
 
-  String reply(String text) {
-    final q = text.toLowerCase().trim();
-
-    if (q.contains('hello') || q.contains('hi') || q.contains('hey')) {
-      return 'Hello! Welcome to Faith Hair Style. What style are you interested in today? I can help with prices, duration, hair color, and booking.';
-    }
-
-    for (final service in services) {
-      final name = (service['name'] ?? '').toString();
-      if (name.isNotEmpty && q.contains(name.toLowerCase())) {
-        return '$name starts at ${formatPrice(service['price'])} and usually takes ${formatDuration(service['duration_minutes'])}. You can book it from the Book tab or send a picture on WhatsApp for confirmation.';
-      }
-    }
-
-    if (q.contains('price') || q.contains('cost') || q.contains('how much')) {
-      if (services.isEmpty) {
-        return 'Prices depend on size, length, and style. Send the hairstyle name or picture for a better quote.';
-      }
-
-      final sample = services.take(4).map((s) {
-        return '${s['name']}: ${formatPrice(s['price'])}';
-      }).join('\n');
-
-      return 'Here are some starting prices:\n$sample\n\nPrices can change based on size, length, color, and hair added. Send a picture for the best quote.';
-    }
-
-    if (q.contains('book') ||
-        q.contains('appointment') ||
-        q.contains('schedule')) {
-      return 'To book, choose a service in the Book tab, select an available date/time, then enter your name and phone number. You can also message us on WhatsApp with the style, size, length, preferred date, and a picture.';
-    }
-
-    if (q.contains('kids') || q.contains('child') || q.contains('children')) {
-      return 'Yes, kids styles are available. We focus on gentle tension, neat parts, and comfortable protective styles for children.';
-    }
-
-    if (q.contains('knotless')) {
-      return 'Knotless braids are a great protective style. Price and time depend on size and length. Small or long knotless braids usually take longer and cost more.';
-    }
-
-    if (q.contains('cornrow') || q.contains('cornrows')) {
-      return 'Cornrows are a neat protective style and can be simple or designed. Send a picture if you want a specific pattern.';
-    }
-
-    if (q.contains('twist') || q.contains('twists')) {
-      return 'Twists are a beautiful natural protective style. Tell me the length and size you want, and whether you want hair added or natural hair only.';
-    }
-
-    if (q.contains('loc') || q.contains('locs')) {
-      return 'Loc styles may be available depending on the look you want. Please send a picture so we can confirm timing and price.';
-    }
-
-    if (q.contains('natural')) {
-      return 'Natural styles are perfect for protective styling. Tell me your hair length and the look you want, and I can recommend a style.';
-    }
-
-    if (q.contains('color')) {
-      return 'Hair color can be selected during booking if available. You can also message us with the color code or picture of the color you want.';
-    }
-
-    if (q.contains('hair')) {
-      return 'Hair may be provided for some styles. You can also bring your own hair if you prefer a specific color, brand, or length.';
-    }
-
-    if (q.contains('location') ||
-        q.contains('where') ||
-        q.contains('address')) {
-      return 'Faith Hair Style is located in Riverdale, Maryland. Appointment details can be shared after booking.';
-    }
-
-    if (q.contains('time') || q.contains('long') || q.contains('duration')) {
-      return 'The time depends on the style, size, and length. You can see service durations in the app, and the booking page will show available time slots.';
-    }
-
-    if (q.contains('cancel') || q.contains('reschedule')) {
-      return 'To cancel or reschedule, please message us on WhatsApp as soon as possible with your name and appointment date.';
-    }
-
-    return 'I can help with that. Please tell me the hairstyle you want, your hair length, your budget, and when you want to book. A picture is best for an accurate recommendation.';
+  String dateOnly(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
   }
 
-  void send() {
-    final text = input.text.trim();
-    if (text.isEmpty) return;
+  Future<void> loadCopilotData() async {
+    if (mounted) setState(() => loadingData = true);
+
+    List<Map<String, dynamic>> loadedServices = [];
+    List<Map<String, dynamic>> loadedColors = [];
+    List<Map<String, dynamic>> loadedAvailability = [];
+    List<Map<String, dynamic>> loadedBookings = [];
+    final today = dateOnly(DateTime.now());
+
+    try {
+      final result = await supabase
+          .from('services')
+          .select(
+            'id,name,description,price,duration_minutes,category,is_active,image_url,created_at',
+          )
+          .eq('is_active', true)
+          .order('price', ascending: true);
+      loadedServices = List<Map<String, dynamic>>.from(result);
+    } catch (_) {
+      try {
+        final result = await supabase
+            .from('services')
+            .select()
+            .eq('is_active', true)
+            .order('price', ascending: true);
+        loadedServices = List<Map<String, dynamic>>.from(result);
+      } catch (_) {}
+    }
+
+    try {
+      final result = await supabase
+          .from('hair_colors')
+          .select()
+          .eq('is_active', true)
+          .order('code', ascending: true);
+      loadedColors = List<Map<String, dynamic>>.from(result);
+    } catch (_) {}
+
+    try {
+      final result = await supabase
+          .from('availability_slots')
+          .select('id,slot_date,start_time,end_time,is_available')
+          .eq('is_available', true)
+          .gte('slot_date', today)
+          .order('slot_date', ascending: true)
+          .order('start_time', ascending: true)
+          .limit(100);
+      loadedAvailability = List<Map<String, dynamic>>.from(result);
+    } catch (_) {}
+
+    try {
+      final result = await supabase
+          .from('bookings')
+          .select(
+            'service_id,booking_date,start_time,end_time,status,hair_color_code,created_at',
+          )
+          .gte('booking_date', today)
+          .order('booking_date', ascending: true)
+          .order('start_time', ascending: true)
+          .limit(100);
+      loadedBookings = List<Map<String, dynamic>>.from(result);
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() {
+      services = loadedServices;
+      hairColors = loadedColors;
+      availabilitySlots = loadedAvailability;
+      safeBookings = loadedBookings;
+      loadingData = false;
+    });
+  }
+
+  String money(dynamic value) {
+    if (value == null) return 'not listed';
+    final parsed = double.tryParse(value.toString());
+    if (parsed == null) return value.toString();
+    if (parsed == parsed.roundToDouble()) {
+      return '\$${parsed.toStringAsFixed(0)}';
+    }
+    return '\$${parsed.toStringAsFixed(2)}';
+  }
+
+  String durationText(dynamic value) {
+    final minutes = int.tryParse(value?.toString() ?? '');
+    if (minutes == null || minutes <= 0) return 'not listed';
+    final hours = minutes ~/ 60;
+    final remainder = minutes % 60;
+    if (hours == 0) return '$minutes minutes';
+    if (remainder == 0) return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+    return '$hours hr $remainder min';
+  }
+
+  String buildServiceContext() {
+    if (services.isEmpty) {
+      return 'No live service records are currently available.';
+    }
+    return services.map((service) {
+      final name = (service['name'] ?? '').toString().trim();
+      final category = (service['category'] ?? '').toString().trim();
+      final description = (service['description'] ?? '').toString().trim();
+      final imageAvailable =
+          (service['image_url'] ?? '').toString().trim().isNotEmpty;
+      return '- $name | category: $category | starting price: ${money(service['price'])} | '
+          'duration: ${durationText(service['duration_minutes'])} | '
+          'description: $description | image available: $imageAvailable';
+    }).join('\n');
+  }
+
+  String buildColorContext() {
+    if (hairColors.isEmpty) {
+      return 'No live hair-color records are currently available.';
+    }
+    return hairColors.map((color) {
+      final code = (color['code'] ?? '').toString().trim();
+      final name = (color['name'] ?? '').toString().trim();
+      return '- $code: $name';
+    }).join('\n');
+  }
+
+  String buildAvailabilityContext() {
+    if (availabilitySlots.isNotEmpty) {
+      return availabilitySlots.take(60).map((slot) {
+        return '- ${slot['slot_date']} | ${slot['start_time']} to ${slot['end_time']}';
+      }).join('\n');
+    }
+
+    return 'No dedicated availability-slot records were returned. '
+        'Business booking hours are ${bookingStartHour.toString().padLeft(2, '0')}:00 '
+        'to ${bookingEndHour.toString().padLeft(2, '0')}:00 with '
+        '$bookingIntervalMinutes-minute start-time intervals. '
+        'Do not claim a specific time is available unless the booking system verifies it.';
+  }
+
+  String serviceNameForId(dynamic id) {
+    for (final service in services) {
+      if (service['id']?.toString() == id?.toString()) {
+        return (service['name'] ?? 'Service').toString();
+      }
+    }
+    return 'Service';
+  }
+
+  String buildSafeBookingContext() {
+    if (safeBookings.isEmpty) {
+      return 'No customer-safe future booking occupancy records were returned.';
+    }
+
+    return safeBookings.take(60).map((booking) {
+      final serviceName = serviceNameForId(booking['service_id']);
+      return '- $serviceName | date: ${booking['booking_date']} | '
+          'time: ${booking['start_time']} to ${booking['end_time']} | '
+          'status: ${booking['status']} | color code: ${booking['hair_color_code'] ?? ''}';
+    }).join('\n');
+  }
+
+  String buildChatHistory() {
+    final recent = messages.length > 18
+        ? messages.sublist(messages.length - 18)
+        : messages;
+
+    return recent.map((message) {
+      if (message.containsKey('user')) {
+        return 'Customer: ${message['user']}';
+      }
+      return 'Faith AI: ${message['bot']}';
+    }).join('\n');
+  }
+
+  String buildCustomerMemory() {
+    final values = <String>[];
+    if (rememberedBudget != null) values.add('Budget: $rememberedBudget');
+    if (rememberedLength != null) values.add('Length: $rememberedLength');
+    if (rememberedSize != null) values.add('Size: $rememberedSize');
+    if (rememberedColor != null) values.add('Color: $rememberedColor');
+    if (rememberedOccasion != null) values.add('Occasion: $rememberedOccasion');
+    if (rememberedDatePreference != null) {
+      values.add('Date/time preference: $rememberedDatePreference');
+    }
+    return values.isEmpty ? 'No preferences captured yet.' : values.join('\n');
+  }
+
+  void rememberCustomerPreferences(String text) {
+    final lower = text.toLowerCase();
+
+    final budgetMatch = RegExp(
+      r'(?:\$\s*|budget(?:\s+is|\s+of|\s+around|\s+about|\s+under)?\s*\$?)(\d{2,4})',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (budgetMatch != null) {
+      rememberedBudget = '\$${budgetMatch.group(1)}';
+    }
+
+    const lengths = [
+      'shoulder',
+      'midback',
+      'mid back',
+      'waist',
+      'top butt',
+      'mid butt',
+      'under butt',
+      'butt length',
+    ];
+    for (final value in lengths) {
+      if (lower.contains(value)) rememberedLength = value;
+    }
+
+    const sizes = [
+      'jumbo',
+      'large',
+      'medium',
+      'small medium',
+      'semi-medium',
+      'semi medium',
+      'small',
+    ];
+    for (final value in sizes) {
+      if (lower.contains(value)) rememberedSize = value;
+    }
+
+    final colorMatch = RegExp(
+      r'(?:color|colour)\s*(?:#|number|no\.?|code)?\s*([0-9]{1,3}[a-z]?)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (colorMatch != null) rememberedColor = colorMatch.group(1);
+
+    const occasions = [
+      'birthday',
+      'wedding',
+      'vacation',
+      'work',
+      'school',
+      'party',
+      'photoshoot',
+      'photo shoot',
+    ];
+    for (final value in occasions) {
+      if (lower.contains(value)) rememberedOccasion = value;
+    }
+
+    const dateWords = [
+      'today',
+      'tomorrow',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+      'morning',
+      'afternoon',
+      'evening',
+    ];
+    final mentioned = dateWords.where(lower.contains).toList();
+    if (mentioned.isNotEmpty) rememberedDatePreference = mentioned.join(', ');
+  }
+
+  Map<String, dynamic>? findServiceFromText(String text) {
+    final lower = text.toLowerCase();
+
+    for (final service in services) {
+      final name = service['name']?.toString().trim().toLowerCase() ?? '';
+      if (name.isNotEmpty && lower.contains(name)) return service;
+    }
+
+    const aliases = <String, List<String>>{
+      'knotless': ['knotless'],
+      'fulani': ['fulani'],
+      'lemonade': ['lemonade'],
+      'senegalese': ['senegalese'],
+      'twist': ['twist'],
+      'ponytail': ['ponytail'],
+      'cornrow': ['cornrow'],
+      'boho': ['boho'],
+      'spring': ['spring'],
+      'kids': ['kids', 'kid', 'child'],
+      'loc': ['loc', 'locs'],
+    };
+
+    for (final entry in aliases.entries) {
+      if (!entry.value.any(lower.contains)) continue;
+      final matches = services.where((service) {
+        final name = service['name']?.toString().toLowerCase() ?? '';
+        final category = service['category']?.toString().toLowerCase() ?? '';
+        return name.contains(entry.key) || category.contains(entry.key);
+      }).toList();
+      if (matches.isNotEmpty) return matches.first;
+    }
+
+    return null;
+  }
+
+  bool isBookingIntent(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('book') ||
+        lower.contains('appointment') ||
+        lower.contains('schedule') ||
+        lower.contains('reserve') ||
+        lower.contains('available time') ||
+        lower.contains('availability') ||
+        lower.contains('ready');
+  }
+
+  String buildDinMaxPrompt(String customerMessage) {
+    return '''
+You are Faith AI Copilot, the intelligent customer assistant for Faith Hair Style.
+
+BUSINESS
+- Faith Hair Style
+- Riverdale, Maryland
+- Phone / WhatsApp: +1 301-541-9875
+- Business booking hours: $bookingStartHour:00 to $bookingEndHour:00
+- Booking start-time interval: every $bookingIntervalMinutes minutes
+- Customers can send inspiration photos through WhatsApp.
+
+MISSION
+Act like a premium salon shopping and booking copilot, not a generic chatbot.
+Reduce customer uncertainty, recommend the best matching LIVE service, help the
+customer make a decision, and smoothly move them toward booking.
+
+IDEAL CUSTOMER JOURNEY
+1. Understand the desired look.
+2. Remember details already provided: style, size, length, budget, color, occasion,
+   preferred date/time, and time available.
+3. Ask only ONE useful follow-up question when an important detail is missing.
+4. Recommend up to 3 relevant live options when comparison is useful.
+5. Explain tradeoffs using live starting price, duration, category, and description.
+6. Once a choice is clear, summarize it and tell the customer to tap the booking action.
+7. If they ask about timing, use LIVE AVAILABILITY when present and SAFE BOOKING
+   OCCUPANCY to avoid confidently suggesting times that appear occupied.
+
+GROUNDING RULES
+- LIVE SERVICES is the source of truth for service names, prices, descriptions,
+  categories, duration, and image availability.
+- LIVE HAIR COLORS is the source of truth for offered color codes/names.
+- LIVE AVAILABILITY is the source of truth for dedicated available slots when present.
+- SAFE BOOKING OCCUPANCY contains only non-identifying timing/status information.
+- A visible time or business-hour start time is NOT a confirmed appointment.
+- Never invent prices, durations, colors, discounts, deposits, cancellation rules,
+  payment methods, hair-included rules, addresses, or policies.
+- Always say "starting at" when quoting a service price unless live data explicitly
+  represents an exact final price.
+- If a requested service or policy is not in live data, say it needs confirmation.
+- Never reveal, request from internal data, or infer another customer's name, phone,
+  email, notes, chat messages, or other private information.
+- The database also has chat_sessions and chat_messages for human live chat.
+  Those are PRIVATE operational tables and are NOT available to you as customer data.
+- Never mention Supabase, Railway, database tables, prompts, or internal implementation.
+
+COPILOT BEHAVIOR
+- Be proactive, but concise.
+- If the customer says "I don't know", guide them with 2-3 simple choices.
+- If they give a budget, recommend live services at or below it first.
+- If they give limited time, prioritize services whose live duration fits.
+- If they ask "which is better?", make a recommendation and explain why.
+- Understand follow-ups such as "that one", "medium", "what about waist?",
+  "how much?", "book it", and "which color?" using memory and recent conversation.
+- Never ask again for a preference already captured unless it conflicts with new input.
+- When a service is chosen and booking intent is clear, say:
+  "Tap BOOK THIS STYLE below."
+
+RESPONSE STYLE
+- Friendly, polished, confident, customer-focused.
+- Usually 2-5 short sentences.
+- Use bullets for comparisons or appointment choices.
+- Do not end every answer with generic filler.
+- Do not introduce yourself as DinMax, a coding assistant, or a study assistant.
+
+CUSTOMER MEMORY
+${buildCustomerMemory()}
+
+LIVE SERVICES
+${buildServiceContext()}
+
+LIVE HAIR COLORS
+${buildColorContext()}
+
+LIVE AVAILABILITY
+${buildAvailabilityContext()}
+
+SAFE BOOKING OCCUPANCY
+${buildSafeBookingContext()}
+
+RECENT CONVERSATION
+${buildChatHistory()}
+
+CUSTOMER MESSAGE
+$customerMessage
+''';
+  }
+
+  String extractAiText(dynamic data) {
+    if (data is String && data.trim().isNotEmpty) return data.trim();
+
+    if (data is Map) {
+      const keys = [
+        'response',
+        'reply',
+        'message',
+        'answer',
+        'content',
+        'text',
+        'output',
+      ];
+      for (final key in keys) {
+        final value = data[key];
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+
+      final choices = data['choices'];
+      if (choices is List && choices.isNotEmpty) {
+        final first = choices.first;
+        if (first is Map) {
+          final message = first['message'];
+          if (message is Map && message['content'] is String) {
+            return (message['content'] as String).trim();
+          }
+          if (first['text'] is String) return (first['text'] as String).trim();
+        }
+      }
+    }
+
+    return '';
+  }
+
+  Future<String> askDinMaxAi(String customerMessage) async {
+    final prompt = buildDinMaxPrompt(customerMessage);
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse(dinMaxAiUrl),
+            headers: const {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({'message': prompt}),
+          )
+          .timeout(const Duration(seconds: 45));
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        dynamic data;
+        try {
+          data = jsonDecode(response.body);
+        } catch (_) {
+          data = response.body;
+        }
+
+        final answer = extractAiText(data);
+        if (answer.isNotEmpty) return answer;
+        return 'I received your question, but I could not read the AI response. Please try again.';
+      }
+
+      return 'Faith AI is temporarily unavailable (${response.statusCode}). Please try again shortly.';
+    } on TimeoutException {
+      return 'Faith AI is taking longer than expected. Please try again.';
+    } catch (_) {
+      return 'I could not connect to Faith AI right now. Please try again in a moment.';
+    }
+  }
+
+  Future<void> send([String? preset]) async {
+    final text = (preset ?? input.text).trim();
+    if (text.isEmpty || aiThinking) return;
+
+    rememberCustomerPreferences(text);
 
     setState(() {
       messages.add({'user': text});
-      messages.add({'bot': reply(text)});
       input.clear();
+      aiThinking = true;
+      showBookingAction = showBookingAction || isBookingIntent(text);
     });
+    scrollToBottom();
 
+    final answer = await askDinMaxAi(text);
+    if (!mounted) return;
+
+    final detectedService = findServiceFromText('$text $answer');
+    if (detectedService != null) {
+      lastSuggestedService = detectedService['name']?.toString();
+    }
+
+    final lowerAnswer = answer.toLowerCase();
+    if (isBookingIntent(answer) ||
+        lowerAnswer.contains('book this style') ||
+        lowerAnswer.contains('tap book')) {
+      showBookingAction = true;
+    }
+
+    setState(() {
+      messages.add({'bot': answer});
+      aiThinking = false;
+    });
+    scrollToBottom();
+  }
+
+  void scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!scrollController.hasClients) return;
       scrollController.animateTo(
-        scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 250),
+        scrollController.position.maxScrollExtent + 160,
+        duration: const Duration(milliseconds: 260),
         curve: Curves.easeOut,
       );
     });
   }
 
-  void askQuickQuestion(String question) {
-    input.text = question;
-    send();
+  Map<String, dynamic>? selectedServiceForBooking() {
+    if (lastSuggestedService == null) return null;
+    for (final service in services) {
+      if (service['name']?.toString() == lastSuggestedService) return service;
+    }
+    return null;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const BusinessAppBar(title: 'AI Assistant'),
-      body: Column(
-        children: [
-          MaxWidth(
-            width: 860,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
+  void openBooking() {
+    final service = selectedServiceForBooking();
+    if (service == null) {
+      setState(() {
+        messages.add({
+          'bot':
+              'Tell me which hairstyle you want first. I can recommend one from your budget, length, size, and preferred time.'
+        });
+      });
+      scrollToBottom();
+      return;
+    }
+    widget.onBook(service);
+  }
+
+  Widget quickChip(String label, IconData icon, String prompt) {
+    return ActionChip(
+      avatar: Icon(icon, size: 17, color: kPrimaryDark),
+      label: Text(label),
+      onPressed: aiThinking ? null : () => send(prompt),
+      backgroundColor: Colors.white,
+      side: const BorderSide(color: kBorder),
+      labelStyle: const TextStyle(
+        color: kInk,
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+
+  Widget messageBubble(Map<String, String> message) {
+    final isBot = message.containsKey('bot');
+    return Align(
+      alignment: isBot ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.all(13),
+        constraints: BoxConstraints(
+          maxWidth: widget.fullPage ? 680 : 350,
+        ),
+        decoration: BoxDecoration(
+          gradient: isBot
+              ? null
+              : const LinearGradient(
+                  colors: [kPrimary, Color(0xFFF0BC27)],
+                ),
+          color: isBot ? Colors.white : null,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isBot ? 5 : 18),
+            bottomRight: Radius.circular(isBot ? 18 : 5),
+          ),
+          border: isBot ? Border.all(color: kBorder) : null,
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isBot ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isBot) ...[
+                  const Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 14,
+                    color: kPrimaryDark,
+                  ),
+                  const SizedBox(width: 5),
+                ],
+                Text(
+                  isBot ? 'Faith AI' : 'You',
+                  style: const TextStyle(
+                    color: kInk,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            SelectableText(
+              isBot ? message['bot']! : message['user']!,
+              style: const TextStyle(
+                color: kInk,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildCopilotBody() {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [kInk, kDarkSurface, kRoyalBlue],
+            ),
+          ),
+          child: Row(
+            children: [
+              const CircleAvatar(
+                radius: 20,
+                backgroundColor: kPrimary,
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: kInk,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'FAITH AI COPILOT',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      loadingData
+                          ? 'Loading live salon information...'
+                          : 'Styles • prices • colors • timing • booking',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFFFD761),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Refresh salon information',
+                onPressed: loadingData ? null : loadCopilotData,
+                icon: const Icon(
+                  Icons.refresh_rounded,
+                  color: Colors.white70,
+                  size: 20,
+                ),
+              ),
+              if (widget.onMinimize != null)
+                IconButton(
+                  tooltip: 'Minimize',
+                  onPressed: widget.onMinimize,
+                  icon: const Icon(
+                    Icons.remove_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              if (widget.onClose != null)
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: widget.onClose,
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 48,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            children: [
+              quickChip(
+                'Choose for me',
+                Icons.auto_awesome_rounded,
+                'Help me choose the best hairstyle. Ask only one useful question if you still need information.',
+              ),
+              const SizedBox(width: 7),
+              quickChip(
+                'Under my budget',
+                Icons.savings_outlined,
+                'Help me find hairstyles that fit my budget. Ask my budget only if I have not told you yet.',
+              ),
+              const SizedBox(width: 7),
+              quickChip(
+                'Compare',
+                Icons.compare_arrows_rounded,
+                'Compare up to three relevant live styles by starting price, duration, and look, then recommend one.',
+              ),
+              const SizedBox(width: 7),
+              quickChip(
+                'Open times',
+                Icons.schedule_rounded,
+                'Help me understand the next possible appointment times using live availability and booking information.',
+              ),
+              const SizedBox(width: 7),
+              quickChip(
+                'Colors',
+                Icons.palette_outlined,
+                'Show me the available hair color codes and names.',
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.builder(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            itemCount: messages.length + (aiThinking ? 1 : 0),
+            itemBuilder: (_, index) {
+              if (aiThinking && index == messages.length) {
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(17),
                       border: Border.all(color: kBorder),
                     ),
                     child: const Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircleAvatar(
-                          backgroundColor: kSoftPink,
-                          child: Icon(Icons.smart_toy_rounded, color: kPrimary),
+                        SizedBox(
+                          width: 15,
+                          height: 15,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Ask about styles, starting prices, hair color, duration, and how to book.',
-                            style: TextStyle(color: kMuted, height: 1.4),
+                        SizedBox(width: 8),
+                        Text(
+                          'Faith AI is thinking...',
+                          style: TextStyle(
+                            color: kMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ActionChip(
-                        avatar: const Icon(Icons.attach_money_rounded),
-                        label: const Text('How much are braids?'),
-                        onPressed: () =>
-                            askQuickQuestion('How much are braids?'),
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.calendar_month_rounded),
-                        label: const Text('How do I book?'),
-                        onPressed: () => askQuickQuestion('How do I book?'),
-                      ),
-                      ActionChip(
-                        avatar: const Icon(Icons.child_care_rounded),
-                        label: const Text('Do you do kids styles?'),
-                        onPressed: () =>
-                            askQuickQuestion('Do you do kids styles?'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+                );
+              }
+              return messageBubble(messages[index]);
+            },
           ),
-          Expanded(
-            child: MaxWidth(
-              width: 860,
-              child: ListView.builder(
-                controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
-                itemCount: messages.length,
-                itemBuilder: (_, i) {
-                  final item = messages[i];
-                  final isBot = item.containsKey('bot');
-
-                  return Align(
-                    alignment:
-                        isBot ? Alignment.centerLeft : Alignment.centerRight,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      padding: const EdgeInsets.all(14),
-                      constraints: const BoxConstraints(maxWidth: 620),
-                      decoration: BoxDecoration(
-                        color: isBot ? Colors.white : kPrimary,
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(20),
-                          topRight: const Radius.circular(20),
-                          bottomLeft: Radius.circular(isBot ? 4 : 20),
-                          bottomRight: Radius.circular(isBot ? 20 : 4),
-                        ),
-                        border: isBot ? Border.all(color: kBorder) : null,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: .04),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Text(
-                        isBot ? item['bot']! : item['user']!,
-                        style: TextStyle(
-                          color: isBot ? kInk : Colors.white,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          SafeArea(
-            top: false,
-            child: MaxWidth(
-              width: 860,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: input,
-                        onSubmitted: (_) => send(),
-                        decoration: const InputDecoration(
-                          hintText: 'Ask about styles, prices, booking...',
-                          prefixIcon: Icon(Icons.chat_bubble_outline_rounded),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    FilledButton(
-                      onPressed: send,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: kPrimary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 16,
-                        ),
-                      ),
-                      child: const Icon(Icons.send_rounded),
-                    ),
-                  ],
+        ),
+        if (showBookingAction && !aiThinking)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: openBooking,
+                icon: const Icon(Icons.calendar_month_rounded),
+                label: Text(
+                  lastSuggestedService == null
+                      ? 'CHOOSE A STYLE TO BOOK'
+                      : 'BOOK ${lastSuggestedService!.toUpperCase()}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: kInk,
+                  foregroundColor: Colors.white,
                 ),
               ),
             ),
           ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: kBorder)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: input,
+                  enabled: !aiThinking,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) {
+                    if (!aiThinking) send();
+                  },
+                  decoration: const InputDecoration(
+                    hintText:
+                        'Ask Faith AI about styles, budget, colors, timing, or booking...',
+                    hintStyle: TextStyle(fontSize: 12.5),
+                    prefixIcon: Icon(Icons.chat_bubble_outline_rounded),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 48,
+                height: 48,
+                child: FilledButton(
+                  onPressed: aiThinking ? null : () => send(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kPrimary,
+                    foregroundColor: kInk,
+                    padding: EdgeInsets.zero,
+                    shape: const CircleBorder(),
+                  ),
+                  child: const Icon(Icons.send_rounded, size: 20),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.fullPage) {
+      return Container(
+        constraints: const BoxConstraints(maxWidth: 900),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: kBorder),
+        ),
+        child: buildCopilotBody(),
+      );
+    }
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: kPrimary, width: 1.3),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .24),
+            blurRadius: 32,
+            offset: const Offset(0, 14),
+          ),
         ],
       ),
+      child: buildCopilotBody(),
     );
   }
 }
