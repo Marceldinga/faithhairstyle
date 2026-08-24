@@ -1,4 +1,5 @@
-﻿import 'dart:math';
+import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -483,6 +484,8 @@ class _HomePageState extends State<HomePage> {
               onSearchChanged: (v) => setState(() => search = v.toLowerCase()),
               onBookTap: widget.onOpenBooking,
             ),
+            FaithAdvertisingBanner(onBookTap: widget.onOpenBooking),
+            FaithBrandSection(onBookTap: widget.onOpenBooking),
             MaxWidth(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
@@ -927,6 +930,475 @@ class _TrustRow extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+
+class FaithAdvertisingBanner extends StatefulWidget {
+  final VoidCallback onBookTap;
+
+  const FaithAdvertisingBanner({
+    super.key,
+    required this.onBookTap,
+  });
+
+  @override
+  State<FaithAdvertisingBanner> createState() => _FaithAdvertisingBannerState();
+}
+
+class _FaithAdvertisingBannerState extends State<FaithAdvertisingBanner> {
+  int currentMessage = 0;
+  Timer? timer;
+
+  static const messages = [
+    (
+      icon: Icons.auto_awesome_rounded,
+      title: 'YOUR NEXT LOOK STARTS HERE',
+      message:
+          'Beautiful protective styles, neat parts, and a polished finish created with care at Faith Hair Style.',
+      action: 'BOOK YOUR STYLE',
+    ),
+    (
+      icon: Icons.favorite_rounded,
+      title: 'BRAIDS MADE WITH CARE',
+      message:
+          'Comfort matters. Choose a style you love and let Faith Hair Style create a clean, confident look for you.',
+      action: 'EXPLORE & BOOK',
+    ),
+    (
+      icon: Icons.location_on_rounded,
+      title: 'FAITH HAIR STYLE • RIVERDALE, MD',
+      message:
+          'Professional protective styling for adults and kids. Browse styles, check starting prices, and request your appointment online.',
+      action: 'BOOK NOW',
+    ),
+    (
+      icon: Icons.photo_camera_rounded,
+      title: 'HAVE A STYLE IN MIND?',
+      message:
+          'Send your inspiration photo on WhatsApp and Faith Hair Style can help you choose the right size, length, and finish.',
+      action: 'MESSAGE US',
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      setState(() {
+        currentMessage = (currentMessage + 1) % messages.length;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = messages[currentMessage];
+    final compact = MediaQuery.sizeOf(context).width < 650;
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [kRoyalBlue, kDarkSurface, kInk],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+      ),
+      child: MaxWidth(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 18 : 28,
+            vertical: compact ? 20 : 24,
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 500),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(.03, 0),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Container(
+              key: ValueKey(currentMessage),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .07),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: kPrimary.withValues(alpha: .65)),
+              ),
+              child: compact
+                  ? Column(
+                      children: [
+                        _AdvertisingMessageContent(item: item),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: item.action == 'MESSAGE US'
+                                ? () => openUrl('https://wa.me/$whatsappNumber')
+                                : widget.onBookTap,
+                            icon: Icon(
+                              item.action == 'MESSAGE US'
+                                  ? Icons.chat_rounded
+                                  : Icons.calendar_month_rounded,
+                            ),
+                            label: Text(item.action),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: kPrimary,
+                              foregroundColor: kInk,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: _AdvertisingMessageContent(item: item)),
+                        const SizedBox(width: 24),
+                        FilledButton.icon(
+                          onPressed: item.action == 'MESSAGE US'
+                              ? () => openUrl('https://wa.me/$whatsappNumber')
+                              : widget.onBookTap,
+                          icon: Icon(
+                            item.action == 'MESSAGE US'
+                                ? Icons.chat_rounded
+                                : Icons.calendar_month_rounded,
+                          ),
+                          label: Text(item.action),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: kPrimary,
+                            foregroundColor: kInk,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 17,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdvertisingMessageContent extends StatelessWidget {
+  final ({IconData icon, String title, String message, String action}) item;
+
+  const _AdvertisingMessageContent({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: kPrimary,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Icon(item.icon, color: kInk, size: 26),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                style: const TextStyle(
+                  color: kPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                item.message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  height: 1.45,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class FaithBrandSection extends StatelessWidget {
+  final VoidCallback onBookTap;
+
+  const FaithBrandSection({
+    super.key,
+    required this.onBookTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 760;
+
+    return MaxWidth(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 26, 18, 6),
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(compact ? 20 : 30),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: kBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: .06),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    'DISCOVER FAITH HAIR STYLE',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: kPrimaryDark,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      letterSpacing: 2.1,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Protective styles that look beautiful and feel like you.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: kInk,
+                      fontSize: compact ? 27 : 38,
+                      height: 1.12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'From braids and twists to kids styles and natural looks, Faith Hair Style makes it easy to explore your options, see starting prices, and request your appointment.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: kMuted,
+                      fontSize: 16,
+                      height: 1.55,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  LayoutBuilder(
+                    builder: (_, constraints) {
+                      final oneColumn = constraints.maxWidth < 680;
+                      final cards = [
+                        const _BrandBenefitCard(
+                          icon: Icons.content_cut_rounded,
+                          title: 'Neat, polished styles',
+                          text:
+                              'Clean parts and beautiful finishing for a confident look.',
+                        ),
+                        const _BrandBenefitCard(
+                          icon: Icons.favorite_outline_rounded,
+                          title: 'Comfort focused',
+                          text:
+                              'Protective styling with attention to gentle tension and care.',
+                        ),
+                        const _BrandBenefitCard(
+                          icon: Icons.calendar_month_rounded,
+                          title: 'Easy online booking',
+                          text:
+                              'Choose your style, preferred date, and time right from your phone.',
+                        ),
+                      ];
+
+                      if (oneColumn) {
+                        return Column(
+                          children: [
+                            for (int i = 0; i < cards.length; i++) ...[
+                              cards[i],
+                              if (i != cards.length - 1)
+                                const SizedBox(height: 12),
+                            ],
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (int i = 0; i < cards.length; i++) ...[
+                            Expanded(child: cards[i]),
+                            if (i != cards.length - 1)
+                              const SizedBox(width: 14),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: onBookTap,
+                        icon: const Icon(Icons.calendar_month_rounded),
+                        label: const Text('BOOK AN APPOINTMENT'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: kPrimary,
+                          foregroundColor: kInk,
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => openUrl('https://wa.me/$whatsappNumber'),
+                        icon: const Icon(Icons.chat_rounded),
+                        label: const Text('SEND YOUR STYLE PHOTO'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const _SectionTitle(
+              eyebrow: 'FIND YOUR STYLE',
+              title: 'Browse styles & starting prices',
+              subtitle:
+                  'Choose a category or search below to find the look you want.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandBenefitCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String text;
+
+  const _BrandBenefitCard({
+    required this.icon,
+    required this.title,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: kBorder.withValues(alpha: .75)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: kSoftPink,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: kPrimaryDark),
+          ),
+          const SizedBox(height: 13),
+          Text(
+            title,
+            style: const TextStyle(
+              color: kInk,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              color: kMuted,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+
+  const _SectionTitle({
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          eyebrow,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: kPrimaryDark,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: kInk,
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: kMuted, height: 1.4),
         ),
       ],
     );
