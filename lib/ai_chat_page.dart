@@ -16,7 +16,6 @@ class AIChatPage extends StatefulWidget {
 class _AIChatPageState extends State<AIChatPage> {
   final TextEditingController controller = TextEditingController();
   final ScrollController scrollController = ScrollController();
-
   final supabase = Supabase.instance.client;
 
   // ============================================================
@@ -26,37 +25,39 @@ class _AIChatPageState extends State<AIChatPage> {
   static const String dinMaxUrl =
       'https://dinmax-ai-production.up.railway.app/chat';
 
-  // ============================================================
-  // FAITH HAIR STYLE CONTACT
-  // ============================================================
-
-  static const String contactNumber = '3015419875';
+  // Kept for fallback/help responses. The phone number is not displayed
+  // as a large element on the AI screen.
   static const String displayContactNumber = '+1 301-541-9875';
 
   // ============================================================
-  // DATA
+  // BRAND COLORS — MATCH FAITH HAIR STYLE
   // ============================================================
 
-  List<Map<String, String>> messages = [];
+  static const Color navy = Color(0xFF071A42);
+  static const Color deepBlue = Color(0xFF0A2D6E);
+  static const Color royalBlue = Color(0xFF0754AD);
+  static const Color gold = Color(0xFFE4AD16);
+  static const Color deepGold = Color(0xFF9A6800);
+  static const Color pageBackground = Color(0xFFF6F8FC);
+  static const Color softGold = Color(0xFFFFF4D3);
+  static const Color borderGold = Color(0xFFD8B649);
+  static const Color muted = Color(0xFF667085);
+
+  // ============================================================
+  // CHAT + LIVE DATA
+  // ============================================================
+
+  final List<Map<String, String>> messages = [];
 
   List<Map<String, dynamic>> services = [];
-
   List<Map<String, dynamic>> hairColors = [];
+  List<Map<String, dynamic>> availabilitySlots = [];
 
   bool loading = false;
   bool loadingData = true;
+  bool showBookingButton = false;
 
   String? lastSuggestedService;
-
-  // ============================================================
-  // COLORS
-  // ============================================================
-
-  Color get primaryPink => const Color(0xFFE91E63);
-
-  Color get softPink => const Color(0xFFFFF1F5);
-
-  Color get darkText => const Color(0xFF2D1B24);
 
   // ============================================================
   // INITIALIZE
@@ -69,63 +70,99 @@ class _AIChatPageState extends State<AIChatPage> {
     messages.add({
       'role': 'assistant',
       'text':
-          'Hello! 👋 I am the Faith Hair Style AI Assistant powered by DinMax AI.\n\n'
-              'I can help you choose a hairstyle, check prices, learn about '
-              'hair colors, and start your appointment booking.\n\n'
-              '📞 Call or text $displayContactNumber for direct assistance.',
+          'Welcome to Faith Hair Style AI. I can recommend styles, compare '
+              'starting prices and durations, explain hair colors, check '
+              'available appointment times, and help you get ready to book.',
     });
 
     loadSalonData();
   }
 
   // ============================================================
-  // LOAD LIVE SALON DATA FROM SUPABASE
+  // LOAD LIVE SUPABASE DATA
   // ============================================================
+
+  String dateOnly(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
 
   Future<void> loadSalonData() async {
     try {
-      final serviceResponse = await supabase
-          .from('services')
-          .select()
-          .eq('is_active', true)
-          .order('name');
+      final today = dateOnly(DateTime.now());
 
-      final colorResponse = await supabase
-          .from('hair_colors')
-          .select()
-          .eq('is_active', true)
-          .order('code');
+      final results = await Future.wait([
+        supabase
+            .from('services')
+            .select(
+              'id,name,description,price,duration_minutes,category,is_active,image_url',
+            )
+            .eq('is_active', true)
+            .order('price', ascending: true),
+        supabase
+            .from('hair_colors')
+            .select('id,code,name,is_active')
+            .eq('is_active', true)
+            .order('code', ascending: true),
+        supabase
+            .from('availability_slots')
+            .select(
+              'id,slot_date,start_time,end_time,is_available',
+            )
+            .eq('is_available', true)
+            .gte('slot_date', today)
+            .order('slot_date', ascending: true)
+            .order('start_time', ascending: true)
+            .limit(80),
+      ]);
 
       if (!mounted) return;
 
       setState(() {
-        services =
-            List<Map<String, dynamic>>.from(serviceResponse);
-
-        hairColors =
-            List<Map<String, dynamic>>.from(colorResponse);
+        services = List<Map<String, dynamic>>.from(results[0] as List);
+        hairColors = List<Map<String, dynamic>>.from(results[1] as List);
+        availabilitySlots =
+            List<Map<String, dynamic>>.from(results[2] as List);
 
         loadingData = false;
       });
-    } catch (e) {
-      if (!mounted) return;
+    } catch (_) {
+      // Fall back to services only so the assistant still works.
+      try {
+        final serviceResponse = await supabase
+            .from('services')
+            .select()
+            .eq('is_active', true)
+            .order('price', ascending: true);
 
-      setState(() {
-        loadingData = false;
+        if (!mounted) return;
 
-        messages.add({
-          'role': 'assistant',
-          'text':
-              'I could not load all salon information right now. '
-                  'You can still ask me questions or call/text '
-                  '$displayContactNumber.',
+        setState(() {
+          services =
+              List<Map<String, dynamic>>.from(serviceResponse);
+          loadingData = false;
         });
-      });
+      } catch (_) {
+        if (!mounted) return;
+
+        setState(() {
+          loadingData = false;
+        });
+      }
     }
   }
 
+  Future<void> refreshSalonData() async {
+    if (mounted) {
+      setState(() => loadingData = true);
+    }
+
+    await loadSalonData();
+  }
+
   // ============================================================
-  // SCROLL CHAT
+  // SCROLL
   // ============================================================
 
   void scrollToBottom() {
@@ -133,168 +170,106 @@ class _AIChatPageState extends State<AIChatPage> {
       if (!scrollController.hasClients) return;
 
       scrollController.animateTo(
-        scrollController.position.maxScrollExtent + 150,
-        duration: const Duration(milliseconds: 300),
+        scrollController.position.maxScrollExtent + 160,
+        duration: const Duration(milliseconds: 280),
         curve: Curves.easeOut,
       );
     });
   }
 
   // ============================================================
-  // FIND SERVICE
+  // SERVICE MATCHING
   // ============================================================
 
   Map<String, dynamic>? findServiceFromText(String text) {
     final lower = text.toLowerCase();
 
-    // Try exact service name first.
-
+    // Exact/contained service name first.
     for (final service in services) {
       final name =
-          service['name']?.toString().toLowerCase() ?? '';
+          service['name']?.toString().trim().toLowerCase() ?? '';
 
       if (name.isNotEmpty && lower.contains(name)) {
         return service;
       }
     }
 
-    // Knotless
+    const aliases = <String, List<String>>{
+      'knotless': ['knotless'],
+      'fulani': ['fulani'],
+      'lemonade': ['lemonade'],
+      'senegalese': ['senegalese'],
+      'twist': ['twist'],
+      'ponytail': ['ponytail'],
+      'cornrow': ['cornrow'],
+      'boho': ['boho'],
+      'spring': ['spring'],
+      'kids': ['kids', 'kid', 'child'],
+    };
 
-    if (lower.contains('knotless')) {
-      return services.firstWhere(
-        (service) =>
-            service['name']
-                .toString()
-                .toLowerCase()
-                .contains('knotless'),
-        orElse: () => <String, dynamic>{},
-      );
+    for (final entry in aliases.entries) {
+      final userMentioned =
+          entry.value.any((alias) => lower.contains(alias));
+
+      if (!userMentioned) continue;
+
+      final match = services.where((service) {
+        final name =
+            service['name']?.toString().toLowerCase() ?? '';
+        final category =
+            service['category']?.toString().toLowerCase() ?? '';
+
+        return name.contains(entry.key) ||
+            category.contains(entry.key);
+      }).toList();
+
+      if (match.isNotEmpty) return match.first;
     }
-
-    // Fulani
-
-    if (lower.contains('fulani')) {
-      return services.firstWhere(
-        (service) =>
-            service['name']
-                .toString()
-                .toLowerCase()
-                .contains('fulani'),
-        orElse: () => <String, dynamic>{},
-      );
-    }
-
-    // Lemonade
-
-    if (lower.contains('lemonade')) {
-      return services.firstWhere(
-        (service) =>
-            service['name']
-                .toString()
-                .toLowerCase()
-                .contains('lemonade'),
-        orElse: () => <String, dynamic>{},
-      );
-    }
-
-    // Senegalese
-
-    if (lower.contains('senegalese')) {
-      return services.firstWhere(
-        (service) =>
-            service['name']
-                .toString()
-                .toLowerCase()
-                .contains('senegalese'),
-        orElse: () => <String, dynamic>{},
-      );
-    }
-
-    // Twists
-
-    if (lower.contains('twist')) {
-      return services.firstWhere(
-        (service) =>
-            service['name']
-                .toString()
-                .toLowerCase()
-                .contains('twist'),
-        orElse: () => <String, dynamic>{},
-      );
-    }
-
-    // Ponytail
-
-    if (lower.contains('ponytail')) {
-      return services.firstWhere(
-        (service) =>
-            service['name']
-                .toString()
-                .toLowerCase()
-                .contains('ponytail'),
-        orElse: () => <String, dynamic>{},
-      );
-    }
-
-    // Cornrows
-
-    if (lower.contains('cornrow')) {
-      return services.firstWhere(
-        (service) =>
-            service['name']
-                .toString()
-                .toLowerCase()
-                .contains('cornrow'),
-        orElse: () => <String, dynamic>{},
-      );
-    }
-
-    // General braid
 
     if (lower.contains('braid')) {
-      return services.firstWhere(
-        (service) =>
-            service['category']
-                ?.toString()
-                .toLowerCase()
-                .contains('braid') ??
-            false,
-        orElse: () => <String, dynamic>{},
-      );
+      final matches = services.where((service) {
+        final name =
+            service['name']?.toString().toLowerCase() ?? '';
+        final category =
+            service['category']?.toString().toLowerCase() ?? '';
+
+        return name.contains('braid') ||
+            category.contains('braid');
+      }).toList();
+
+      if (matches.isNotEmpty) return matches.first;
     }
 
     return null;
   }
 
-  // ============================================================
-  // DETECT BOOKING REQUEST
-  // ============================================================
-
-  bool isBookingRequest(String text) {
+  bool isBookingIntent(String text) {
     final lower = text.toLowerCase();
 
     return lower.contains('book') ||
         lower.contains('appointment') ||
         lower.contains('schedule') ||
-        lower.contains('reserve');
+        lower.contains('reserve') ||
+        lower.contains('available time') ||
+        lower.contains('availability');
   }
 
   // ============================================================
-  // OPEN BOOKING PAGE
+  // OPEN BOOKING
   // ============================================================
 
-  Future<void> openBookingFromAI(String userText) async {
-    Map<String, dynamic>? service =
-        findServiceFromText(userText);
+  Future<void> openBookingFromAI() async {
+    Map<String, dynamic>? service;
 
-    if ((service == null || service.isEmpty) &&
-        lastSuggestedService != null) {
-      service = services.firstWhere(
+    if (lastSuggestedService != null) {
+      final matches = services.where(
         (item) =>
-            item['name']?.toString() ==
-            lastSuggestedService,
-        orElse: () => <String, dynamic>{},
+            item['name']?.toString() == lastSuggestedService,
       );
+
+      if (matches.isNotEmpty) {
+        service = matches.first;
+      }
     }
 
     if (service == null || service.isEmpty) {
@@ -304,18 +279,12 @@ class _AIChatPageState extends State<AIChatPage> {
         messages.add({
           'role': 'assistant',
           'text':
-              'Which hairstyle would you like to book?\n\n'
-                  'For example:\n'
-                  '• Knotless Braids\n'
-                  '• Fulani Braids\n'
-                  '• Senegalese Twists\n'
-                  '• Cornrows\n'
-                  '• Kids Styling',
+              'Tell me which style you want first, and I can help narrow it '
+                  'down before opening the booking page.',
         });
       });
 
       scrollToBottom();
-
       return;
     }
 
@@ -324,87 +293,115 @@ class _AIChatPageState extends State<AIChatPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BookingPage(
-          service: service!,
-        ),
+        builder: (_) => BookingPage(service: service!),
       ),
     );
   }
 
   // ============================================================
-  // BUILD SERVICE CONTEXT FOR DINMAX
+  // LIVE CONTEXT FOR DINMAX
   // ============================================================
+
+  String money(dynamic value) {
+    if (value == null) return 'not listed';
+
+    final parsed =
+        double.tryParse(value.toString());
+
+    if (parsed == null) {
+      return value.toString();
+    }
+
+    if (parsed == parsed.roundToDouble()) {
+      return '\$${parsed.toStringAsFixed(0)}';
+    }
+
+    return '\$${parsed.toStringAsFixed(2)}';
+  }
+
+  String duration(dynamic value) {
+    final minutes =
+        int.tryParse(value?.toString() ?? '');
+
+    if (minutes == null || minutes <= 0) {
+      return 'not listed';
+    }
+
+    final hours = minutes ~/ 60;
+    final remainder = minutes % 60;
+
+    if (hours == 0) return '$minutes minutes';
+    if (remainder == 0) {
+      return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+    }
+
+    return '$hours hr $remainder min';
+  }
 
   String buildServiceContext() {
     if (services.isEmpty) {
-      return 'No live service information is currently available.';
+      return 'No live service records are currently available.';
     }
 
     return services.map((service) {
       final name =
-          service['name']?.toString() ?? '';
-
-      final description =
-          service['description']?.toString() ?? '';
-
-      final price =
-          service['price']?.toString() ?? '';
-
-      final duration =
-          service['duration_minutes']?.toString() ?? '';
-
+          (service['name'] ?? '').toString().trim();
       final category =
-          service['category']?.toString() ?? '';
+          (service['category'] ?? '').toString().trim();
+      final description =
+          (service['description'] ?? '').toString().trim();
 
-      return '''
-SERVICE: $name
-CATEGORY: $category
-PRICE: $price
-DURATION: $duration minutes
-DESCRIPTION: $description
-''';
+      return '- $name | category: $category | '
+          'starting price: ${money(service['price'])} | '
+          'duration: ${duration(service['duration_minutes'])} | '
+          'description: $description';
     }).join('\n');
   }
 
-  // ============================================================
-  // BUILD HAIR COLOR CONTEXT
-  // ============================================================
-
   String buildColorContext() {
     if (hairColors.isEmpty) {
-      return 'No hair color information is currently available.';
+      return 'No live hair color records are currently available.';
     }
 
     return hairColors.map((color) {
       final code =
-          color['code']?.toString() ?? '';
-
+          (color['code'] ?? '').toString().trim();
       final name =
-          color['name']?.toString() ?? '';
+          (color['name'] ?? '').toString().trim();
 
-      return '$code = $name';
+      return '- $code: $name';
     }).join('\n');
   }
 
-  // ============================================================
-  // BUILD RECENT CHAT HISTORY
-  // ============================================================
+  String buildAvailabilityContext() {
+    if (availabilitySlots.isEmpty) {
+      return 'No live available appointment slots were returned.';
+    }
+
+    return availabilitySlots.take(50).map((slot) {
+      final date =
+          (slot['slot_date'] ?? '').toString();
+      final start =
+          (slot['start_time'] ?? '').toString();
+      final end =
+          (slot['end_time'] ?? '').toString();
+
+      return '- $date | $start to $end';
+    }).join('\n');
+  }
 
   String buildChatHistory() {
     if (messages.isEmpty) return '';
 
     final start =
-        messages.length > 12
-            ? messages.length - 12
-            : 0;
+        messages.length > 14 ? messages.length - 14 : 0;
 
-    final recentMessages =
+    final recent =
         messages.sublist(start);
 
-    return recentMessages.map((message) {
+    return recent.map((message) {
       final role =
-          message['role'] ?? 'unknown';
-
+          message['role'] == 'user' ? 'Customer' : 'Faith AI';
       final text =
           message['text'] ?? '';
 
@@ -413,132 +410,88 @@ DESCRIPTION: $description
   }
 
   // ============================================================
-  // ASK DINMAX AI
+  // ADVANCED DINMAX PROMPT
   // ============================================================
 
   Future<String> askDinMax(String customerMessage) async {
-    final serviceContext =
-        buildServiceContext();
-
-    final colorContext =
-        buildColorContext();
-
-    final history =
-        buildChatHistory();
-
-    /*
-      IMPORTANT:
-
-      DinMax /chat accepts:
-
-      {
-        "message": "..."
-      }
-
-      Therefore ALL Faith Hair Style information goes
-      inside the message.
-    */
-
     final aiMessage = '''
-You are the official AI assistant for Faith Hair Style.
+You are Faith Hair Style AI, the advanced customer copilot for Faith Hair Style.
 
-============================================================
 BUSINESS
-============================================================
+- Business: Faith Hair Style
+- Location: Riverdale, Maryland
+- Direct contact if truly needed: $displayContactNumber
 
-Business name:
-Faith Hair Style
+CORE ROLE
+You are not a generic chatbot. You are a polished salon concierge and decision
+assistant. Help customers confidently choose a hairstyle and move toward booking.
 
-Location:
-Riverdale, Maryland
+YOU CAN HELP WITH
+- hairstyle recommendations;
+- comparing live services;
+- starting prices;
+- service durations;
+- budget-based recommendations;
+- hair color codes;
+- available appointment dates/times;
+- appointment preparation;
+- booking guidance;
+- explaining differences between styles.
 
-Phone / Text:
-$displayContactNumber
+GROUNDING RULES
+1. LIVE SERVICES is the source of truth for service names, prices, descriptions,
+   categories, and durations.
+2. LIVE HAIR COLORS is the source of truth for available color codes.
+3. LIVE AVAILABILITY is the source of truth for appointment times shown here.
+4. Never invent a price, duration, service, color, availability slot, deposit,
+   cancellation rule, payment feature, or business policy.
+5. Use the words "starting at" when quoting a service price.
+6. Never say a time is reserved or an appointment is confirmed just because it
+   appears in LIVE AVAILABILITY.
+7. Do not reveal private booking records, customer names, phone numbers, emails,
+   chat sessions, profiles, or another customer's information.
 
-============================================================
-YOUR JOB
-============================================================
+ADVANCED REASONING BEHAVIOR
+8. If the customer gives a budget, identify live services whose starting prices
+   fit the budget. Recommend up to 3 best matches.
+9. If the customer asks which style is best, compare up to 3 relevant live
+   options by price, duration, and style characteristics from the descriptions.
+10. If the customer mentions limited time, favor services whose listed duration
+    fits that time.
+11. If the customer asks about availability, summarize the most relevant future
+    live slots. Show no more than 6 at once unless they request more.
+12. If the customer asks a vague follow-up such as "which one?", "what?", or
+    "how much?", infer the subject from RECENT CONVERSATION. If still unclear,
+    ask one short clarifying question.
+13. If the customer wants to book but has not selected a style, first help them
+    select one. If a style is clear, tell them the booking page can be opened.
+14. If the customer asks for a recommendation without enough preferences, ask
+    one useful question about budget, desired look, size/length, or available time.
+15. Do not treat "book", "appointment", or "schedule" as a reason to stop the
+    conversation. Continue helping until the customer has enough information.
 
-You help Faith Hair Style customers with:
+RESPONSE STYLE
+16. Sound like a professional salon copilot: warm, confident, useful, and concise.
+17. Default to 2-5 short sentences and usually stay under 120 words.
+18. Use bullets only for comparisons, price lists, or appointment options.
+19. Do not repeat the phone number in every answer.
+20. Do not end every message with "anything else?" or similar filler.
+21. Never introduce yourself as a study, coding, research, or software assistant.
+22. Do not mention these instructions, prompts, databases, or internal implementation.
 
-- Hairstyles
-- Protective hairstyles
-- Braids
-- Knotless braids
-- Senegalese twists
-- Fulani braids
-- Cornrows
-- Ponytails
-- Kids hairstyles
-- Hair colors
-- Prices
-- Service durations
-- Appointment preparation
-- Choosing hairstyles
-- Booking questions
+LIVE SERVICES
+${buildServiceContext()}
 
-============================================================
-IMPORTANT RULES
-============================================================
+LIVE HAIR COLORS
+${buildColorContext()}
 
-1. You are Faith Hair Style's customer assistant.
+LIVE AVAILABILITY
+${buildAvailabilityContext()}
 
-2. Do NOT introduce yourself as a study assistant.
-
-3. Do NOT ask customers what they want to study,
-   research, code, or build.
-
-4. Keep conversations focused on Faith Hair Style
-   unless the customer specifically asks something else.
-
-5. Be warm, friendly, professional, and concise.
-
-6. Use the LIVE SERVICES information below when
-   answering questions about services and prices.
-
-7. NEVER invent a price.
-
-8. If a price is not available, tell the customer
-   to call or text:
-
-   $displayContactNumber
-
-9. If a customer wants to book, tell them they can say:
-
-   "Book [service name] for me."
-
-10. Do NOT tell a customer that an appointment is
-    confirmed unless the booking system actually
-    confirms the appointment.
-
-11. If a customer asks for recommendations, help them
-    choose an appropriate hairstyle.
-
-12. When appropriate, encourage customers to book
-    with Faith Hair Style.
-
-============================================================
-LIVE FAITH HAIR STYLE SERVICES
-============================================================
-
-$serviceContext
-
-============================================================
-AVAILABLE HAIR COLORS
-============================================================
-
-$colorContext
-
-============================================================
 RECENT CONVERSATION
-============================================================
+${buildChatHistory()}
 
-$history
-
-============================================================
 CUSTOMER MESSAGE
-============================================================
-
 $customerMessage
 ''';
 
@@ -555,44 +508,42 @@ $customerMessage
             }),
           )
           .timeout(
-            const Duration(seconds: 40),
+            const Duration(seconds: 45),
           );
 
       if (response.statusCode >= 200 &&
           response.statusCode < 300) {
-        if (response.body.isEmpty) {
-          return 'I did not receive a response from the AI. '
-              'Please call or text $displayContactNumber.';
+        if (response.body.trim().isEmpty) {
+          return 'Faith AI did not receive a usable response. '
+              'Please try again.';
         }
 
-        final dynamic decoded =
+        final decoded =
             jsonDecode(response.body);
 
         if (decoded is Map<String, dynamic>) {
           final reply =
-              decoded['reply']?.toString();
+              decoded['reply']?.toString().trim();
 
-          if (reply != null &&
-              reply.trim().isNotEmpty) {
-            return reply.trim();
+          if (reply != null && reply.isNotEmpty) {
+            return reply;
           }
         }
 
-        return 'I could not read the AI response. '
-            'Please call or text $displayContactNumber.';
+        return 'Faith AI received the request, but the response '
+            'could not be read.';
       }
 
-      return 'Faith Hair Style AI is temporarily unavailable '
-          '(server ${response.statusCode}). '
-          'Please call or text $displayContactNumber.';
-    } catch (e) {
-      return 'I could not connect to Faith Hair Style AI. '
-          'Please call or text $displayContactNumber.';
+      return 'Faith AI is temporarily unavailable '
+          '(server ${response.statusCode}). Please try again shortly.';
+    } catch (_) {
+      return 'I could not connect to Faith AI right now. '
+          'Please try again in a moment.';
     }
   }
 
   // ============================================================
-  // SEND MESSAGE
+  // SEND
   // ============================================================
 
   Future<void> sendMessage([
@@ -610,59 +561,28 @@ $customerMessage
       });
 
       loading = true;
+      showBookingButton = isBookingIntent(text);
     });
 
     controller.clear();
-
     scrollToBottom();
-
-    // ----------------------------------------------------------
-    // BOOKING REQUEST
-    // ----------------------------------------------------------
-
-    if (isBookingRequest(text)) {
-      setState(() {
-        loading = false;
-
-        messages.add({
-          'role': 'assistant',
-          'text':
-              'Great! 💕 I will help you start your booking.',
-        });
-      });
-
-      scrollToBottom();
-
-      await Future.delayed(
-        const Duration(
-          milliseconds: 400,
-        ),
-      );
-
-      await openBookingFromAI(text);
-
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // ASK DINMAX
-    // ----------------------------------------------------------
 
     final reply =
         await askDinMax(text);
 
     if (!mounted) return;
 
-    // Remember hairstyle DinMax mentioned.
-
     final detectedService =
-        findServiceFromText(reply);
+        findServiceFromText('$text $reply');
 
     if (detectedService != null &&
         detectedService.isNotEmpty) {
       lastSuggestedService =
-          detectedService['name']
-              ?.toString();
+          detectedService['name']?.toString();
+    }
+
+    if (isBookingIntent(reply)) {
+      showBookingButton = true;
     }
 
     setState(() {
@@ -678,7 +598,18 @@ $customerMessage
   }
 
   // ============================================================
-  // MESSAGE BUBBLE
+  // QUICK PROMPTS
+  // ============================================================
+
+  void askQuickQuestion(String question) {
+    if (loading) return;
+
+    controller.text = question;
+    sendMessage();
+  }
+
+  // ============================================================
+  // CHAT BUBBLE
   // ============================================================
 
   Widget messageBubble(
@@ -693,38 +624,49 @@ $customerMessage
               ? Alignment.centerRight
               : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(
-          vertical: 7,
-        ),
-        padding: const EdgeInsets.all(16),
-        constraints: const BoxConstraints(
-          maxWidth: 750,
-        ),
+        margin:
+            const EdgeInsets.symmetric(vertical: 7),
+        padding:
+            const EdgeInsets.all(16),
+        constraints:
+            const BoxConstraints(maxWidth: 720),
         decoration: BoxDecoration(
-          color:
+          gradient:
               isUser
-                  ? primaryPink
-                  : const Color(0xFFFFF7FA),
-          borderRadius:
-              BorderRadius.circular(18),
+                  ? const LinearGradient(
+                      colors: [
+                        gold,
+                        Color(0xFFF0BC27),
+                      ],
+                    )
+                  : null,
+          color:
+              isUser ? null : Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft:
+                const Radius.circular(22),
+            topRight:
+                const Radius.circular(22),
+            bottomLeft:
+                Radius.circular(isUser ? 22 : 5),
+            bottomRight:
+                Radius.circular(isUser ? 5 : 22),
+          ),
           border:
               isUser
                   ? null
                   : Border.all(
-                      color:
-                          const Color(
-                            0xFFF1D7E2,
-                          ),
+                      color: borderGold,
                     ),
           boxShadow: [
             BoxShadow(
               color:
                   Colors.black.withValues(
-                    alpha: 0.04,
+                    alpha: 0.055,
                   ),
-              blurRadius: 8,
+              blurRadius: 16,
               offset:
-                  const Offset(0, 3),
+                  const Offset(0, 6),
             ),
           ],
         ),
@@ -734,31 +676,37 @@ $customerMessage
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
           children: [
-            Text(
-              isUser
-                  ? 'You'
-                  : 'Faith Hair Style AI',
-              style: TextStyle(
-                color:
-                    isUser
-                        ? Colors.white70
-                        : primaryPink,
-                fontSize: 12,
-                fontWeight:
-                    FontWeight.bold,
-              ),
+            Row(
+              mainAxisSize:
+                  MainAxisSize.min,
+              children: [
+                if (!isUser) ...[
+                  const Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 15,
+                    color: deepGold,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  isUser
+                      ? 'You'
+                      : 'Faith Hair Style AI',
+                  style: const TextStyle(
+                    color: navy,
+                    fontSize: 12,
+                    fontWeight:
+                        FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
-
-            const SizedBox(height: 8),
-
-            Text(
+            const SizedBox(height: 7),
+            SelectableText(
               message['text'] ?? '',
-              style: TextStyle(
-                color:
-                    isUser
-                        ? Colors.white
-                        : darkText,
-                fontSize: 15,
+              style: const TextStyle(
+                color: navy,
+                fontSize: 15.5,
                 height: 1.5,
               ),
             ),
@@ -769,37 +717,44 @@ $customerMessage
   }
 
   // ============================================================
-  // QUICK PROMPT BUTTON
+  // QUICK CHIP
   // ============================================================
 
-  Widget promptButton(
-    String text,
-    IconData icon,
-  ) {
-    return OutlinedButton.icon(
+  Widget quickChip({
+    required String label,
+    required IconData icon,
+    required String prompt,
+  }) {
+    return ActionChip(
+      avatar:
+          Icon(
+            icon,
+            size: 19,
+            color: deepGold,
+          ),
+      label:
+          Text(label),
       onPressed:
           loading
               ? null
               : () =>
-                  sendMessage(text),
-      icon: Icon(
-        icon,
-        color: primaryPink,
-      ),
-      label: Text(text),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: darkText,
-        side: BorderSide(
-          color:
-              primaryPink.withValues(
-                alpha: 0.35,
-              ),
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.circular(20),
-        ),
-      ),
+                  askQuickQuestion(prompt),
+      backgroundColor:
+          Colors.white,
+      side:
+          const BorderSide(
+            color: borderGold,
+          ),
+      shape:
+          RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(16),
+          ),
+      labelStyle:
+          const TextStyle(
+            color: navy,
+            fontWeight: FontWeight.w700,
+          ),
     );
   }
 
@@ -810,9 +765,7 @@ $customerMessage
   @override
   void dispose() {
     controller.dispose();
-
     scrollController.dispose();
-
     super.dispose();
   }
 
@@ -822,366 +775,533 @@ $customerMessage
 
   @override
   Widget build(BuildContext context) {
-    if (loadingData) {
-      return Scaffold(
-        appBar: AppBar(
-          title:
-              const Text(
-                'Faith Hair Style AI',
-              ),
-        ),
-        body: Center(
-          child:
-              CircularProgressIndicator(
-                color: primaryPink,
-              ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor:
-          const Color(0xFFF8F5F7),
-
-      // ========================================================
-      // APP BAR
-      // ========================================================
-
+          pageBackground,
       appBar: AppBar(
-        title:
-            const Text(
-              'Faith Hair Style AI Assistant',
-            ),
         backgroundColor:
-            primaryPink,
+            royalBlue,
         foregroundColor:
             Colors.white,
         elevation: 0,
-      ),
-
-      // ========================================================
-      // BODY
-      // ========================================================
-
-      body: SafeArea(
-        child: Column(
+        title: const Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
           children: [
-            // ==================================================
-            // AI HEADER
-            // ==================================================
-
-            Container(
-              width:
-                  double.infinity,
-              padding:
-                  const EdgeInsets.all(
-                    20,
-                  ),
-              decoration: BoxDecoration(
-                color: primaryPink,
-              ),
-              child: const Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'How can Faith Hair Style help?',
-                    style: TextStyle(
-                      color:
-                          Colors.white,
-                      fontSize: 26,
-                      fontWeight:
-                          FontWeight.bold,
-                    ),
-                  ),
-
-                  SizedBox(height: 7),
-
-                  Text(
-                    'Ask about styles, prices, colors, or appointments.',
-                    style: TextStyle(
-                      color:
-                          Colors.white70,
-                      fontSize: 15,
-                    ),
-                  ),
-
-                  SizedBox(height: 7),
-
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.phone,
-                        color:
-                            Colors.white,
-                        size: 17,
-                      ),
-
-                      SizedBox(width: 6),
-
-                      Text(
-                        '+1 301-541-9875',
-                        style: TextStyle(
-                          color:
-                              Colors.white,
-                          fontWeight:
-                              FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+            Text(
+              'Faith Hair Style AI',
+              style: TextStyle(
+                fontWeight:
+                    FontWeight.w900,
               ),
             ),
-
-            // ==================================================
-            // QUICK QUESTIONS
-            // ==================================================
-
-            Container(
-              width:
-                  double.infinity,
-              padding:
-                  const EdgeInsets.all(
-                    12,
-                  ),
-              color: Colors.white,
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  promptButton(
-                    'What hairstyles do you offer?',
-                    Icons.style,
-                  ),
-
-                  promptButton(
-                    'How much are knotless braids?',
-                    Icons.attach_money,
-                  ),
-
-                  promptButton(
-                    'What hair color is 1B?',
-                    Icons.palette,
-                  ),
-
-                  promptButton(
-                    'Book Fulani Braids for me',
-                    Icons.event,
-                  ),
-                ],
-              ),
-            ),
-
-            // ==================================================
-            // CHAT
-            // ==================================================
-
-            Expanded(
-              child:
-                  ListView.builder(
-                    controller:
-                        scrollController,
-                    padding:
-                        const EdgeInsets.all(
-                          16,
-                        ),
-                    itemCount:
-                        messages.length +
-                        (loading ? 1 : 0),
-                    itemBuilder:
-                        (
-                          context,
-                          index,
-                        ) {
-                      if (loading &&
-                          index ==
-                              messages.length) {
-                        return Align(
-                          alignment:
-                              Alignment
-                                  .centerLeft,
-                          child: Container(
-                            margin:
-                                const EdgeInsets
-                                    .symmetric(
-                                  vertical: 7,
-                                ),
-                            padding:
-                                const EdgeInsets
-                                    .symmetric(
-                                  horizontal:
-                                      18,
-                                  vertical: 14,
-                                ),
-                            decoration:
-                                BoxDecoration(
-                              color:
-                                  Colors.white,
-                              borderRadius:
-                                  BorderRadius
-                                      .circular(
-                                        18,
-                                      ),
-                              border:
-                                  Border.all(
-                                color:
-                                    const Color(
-                                      0xFFF1D7E2,
-                                    ),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize:
-                                  MainAxisSize
-                                      .min,
-                              children: [
-                                SizedBox(
-                                  width: 17,
-                                  height: 17,
-                                  child:
-                                      CircularProgressIndicator(
-                                    strokeWidth:
-                                        2,
-                                    color:
-                                        primaryPink,
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  width: 10,
-                                ),
-
-                                Text(
-                                  'Faith AI is thinking...',
-                                  style:
-                                      TextStyle(
-                                    color:
-                                        darkText,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-
-                      return messageBubble(
-                        messages[index],
-                      );
-                    },
-                  ),
-            ),
-
-            // ==================================================
-            // INPUT
-            // ==================================================
-
-            Container(
-              padding:
-                  const EdgeInsets.all(
-                    14,
-                  ),
-              decoration:
-                  const BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        Color(
-                          0x12000000,
-                        ),
-                    blurRadius: 10,
-                    offset:
-                        Offset(
-                          0,
-                          -3,
-                        ),
-                  ),
-                ],
-              ),
-              child: Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller:
-                          controller,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction:
-                          TextInputAction.send,
-                      onSubmitted:
-                          (_) {
-                        if (!loading) {
-                          sendMessage();
-                        }
-                      },
-                      decoration:
-                          InputDecoration(
-                        hintText:
-                            'Ask Faith Hair Style AI...',
-                        filled: true,
-                        fillColor:
-                            softPink,
-                        contentPadding:
-                            const EdgeInsets
-                                .symmetric(
-                          horizontal: 18,
-                          vertical: 15,
-                        ),
-                        border:
-                            OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius
-                                  .circular(
-                                    22,
-                                  ),
-                          borderSide:
-                              BorderSide
-                                  .none,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(
-                    width: 10,
-                  ),
-
-                  ElevatedButton(
-                    onPressed:
-                        loading
-                            ? null
-                            : () =>
-                                sendMessage(),
-                    style:
-                        ElevatedButton
-                            .styleFrom(
-                      backgroundColor:
-                          primaryPink,
-                      foregroundColor:
-                          Colors.white,
-                      minimumSize:
-                          const Size(
-                            56,
-                            56,
-                          ),
-                      padding:
-                          EdgeInsets.zero,
-                      shape:
-                          const CircleBorder(),
-                    ),
-                    child:
-                        const Icon(
-                          Icons.send,
-                        ),
-                  ),
-                ],
+            Text(
+              'Your salon copilot',
+              style: TextStyle(
+                color: Color(0xFFFFD761),
+                fontSize: 11,
+                fontWeight:
+                    FontWeight.w700,
+                letterSpacing: 1.2,
               ),
             ),
           ],
+        ),
+        actions: [
+          IconButton(
+            tooltip:
+                'Refresh live salon data',
+            onPressed:
+                loadingData
+                    ? null
+                    : refreshSalonData,
+            icon:
+                const Icon(
+                  Icons.refresh_rounded,
+                  color: gold,
+                ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: SafeArea(
+        child: Container(
+          decoration:
+              const BoxDecoration(
+            gradient:
+                LinearGradient(
+              colors: [
+                Color(0xFFF5F8FF),
+                Color(0xFFFFFBF0),
+              ],
+              begin:
+                  Alignment.topCenter,
+              end:
+                  Alignment.bottomCenter,
+            ),
+          ),
+          child: Column(
+            children: [
+              // ==================================================
+              // COPILOT HEADER
+              // ==================================================
+
+              Container(
+                width:
+                    double.infinity,
+                margin:
+                    const EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  8,
+                ),
+                padding:
+                    const EdgeInsets.all(18),
+                decoration:
+                    BoxDecoration(
+                  gradient:
+                      const LinearGradient(
+                    colors: [
+                      navy,
+                      deepBlue,
+                      royalBlue,
+                    ],
+                    begin:
+                        Alignment.centerLeft,
+                    end:
+                        Alignment.centerRight,
+                  ),
+                  borderRadius:
+                      BorderRadius.circular(
+                    26,
+                  ),
+                  border:
+                      Border.all(
+                    color:
+                        gold.withValues(
+                      alpha: .80,
+                    ),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          Colors.black.withValues(
+                        alpha: .12,
+                      ),
+                      blurRadius: 26,
+                      offset:
+                          const Offset(
+                        0,
+                        10,
+                      ),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration:
+                          BoxDecoration(
+                        color: gold,
+                        borderRadius:
+                            BorderRadius.circular(
+                          17,
+                        ),
+                      ),
+                      child:
+                          const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: navy,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(
+                      width: 14,
+                    ),
+                    Expanded(
+                      child:
+                          Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'FAITH AI COPILOT',
+                            style:
+                                TextStyle(
+                              color: gold,
+                              fontSize: 12,
+                              fontWeight:
+                                  FontWeight.w900,
+                              letterSpacing:
+                                  1.6,
+                            ),
+                          ),
+                          const SizedBox(
+                            height: 4,
+                          ),
+                          Text(
+                            loadingData
+                                ? 'Loading live salon information...'
+                                : 'Ask for recommendations, compare prices, check durations, explore colors, or view available appointment times.',
+                            style:
+                                const TextStyle(
+                              color:
+                                  Colors.white,
+                              height: 1.45,
+                              fontWeight:
+                                  FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ==================================================
+              // QUICK ACTIONS
+              // ==================================================
+
+              SizedBox(
+                height: 54,
+                child:
+                    ListView(
+                  scrollDirection:
+                      Axis.horizontal,
+                  padding:
+                      const EdgeInsets.symmetric(
+                    horizontal: 16,
+                  ),
+                  children: [
+                    quickChip(
+                      label:
+                          'Recommend a style',
+                      icon:
+                          Icons.auto_awesome_rounded,
+                      prompt:
+                          'Help me choose a hairstyle. Ask me one useful question first if you need more information.',
+                    ),
+                    const SizedBox(width: 8),
+                    quickChip(
+                      label:
+                          'Compare prices',
+                      icon:
+                          Icons.attach_money_rounded,
+                      prompt:
+                          'Compare a few popular live services by starting price and duration.',
+                    ),
+                    const SizedBox(width: 8),
+                    quickChip(
+                      label:
+                          'Available times',
+                      icon:
+                          Icons.schedule_rounded,
+                      prompt:
+                          'Show me the next available appointment times from the live availability data.',
+                    ),
+                    const SizedBox(width: 8),
+                    quickChip(
+                      label:
+                          'Hair colors',
+                      icon:
+                          Icons.palette_rounded,
+                      prompt:
+                          'Show me the available hair color codes and names.',
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 4),
+
+              // ==================================================
+              // CHAT
+              // ==================================================
+
+              Expanded(
+                child:
+                    ListView.builder(
+                  controller:
+                      scrollController,
+                  padding:
+                      const EdgeInsets.fromLTRB(
+                    16,
+                    8,
+                    16,
+                    16,
+                  ),
+                  itemCount:
+                      messages.length +
+                      (loading ? 1 : 0),
+                  itemBuilder:
+                      (_, index) {
+                    if (loading &&
+                        index ==
+                            messages.length) {
+                      return Align(
+                        alignment:
+                            Alignment.centerLeft,
+                        child:
+                            Container(
+                          margin:
+                              const EdgeInsets.symmetric(
+                            vertical: 7,
+                          ),
+                          padding:
+                              const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 13,
+                          ),
+                          decoration:
+                              BoxDecoration(
+                            color:
+                                Colors.white,
+                            borderRadius:
+                                BorderRadius.circular(
+                              20,
+                            ),
+                            border:
+                                Border.all(
+                              color:
+                                  borderGold,
+                            ),
+                          ),
+                          child:
+                              const Row(
+                            mainAxisSize:
+                                MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 17,
+                                height: 17,
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth:
+                                      2,
+                                  color:
+                                      gold,
+                                ),
+                              ),
+                              SizedBox(
+                                width: 10,
+                              ),
+                              Text(
+                                'Faith AI is thinking...',
+                                style:
+                                    TextStyle(
+                                  color:
+                                      muted,
+                                  fontWeight:
+                                      FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    return messageBubble(
+                      messages[index],
+                    );
+                  },
+                ),
+              ),
+
+              // ==================================================
+              // BOOKING ACTION
+              // ==================================================
+
+              if (showBookingButton &&
+                  !loading)
+                Padding(
+                  padding:
+                      const EdgeInsets.fromLTRB(
+                    16,
+                    0,
+                    16,
+                    8,
+                  ),
+                  child:
+                      SizedBox(
+                    width:
+                        double.infinity,
+                    child:
+                        FilledButton.icon(
+                      onPressed:
+                          openBookingFromAI,
+                      icon:
+                          const Icon(
+                        Icons.calendar_month_rounded,
+                      ),
+                      label:
+                          const Text(
+                        'OPEN BOOKING',
+                      ),
+                      style:
+                          FilledButton.styleFrom(
+                        backgroundColor:
+                            navy,
+                        foregroundColor:
+                            Colors.white,
+                        padding:
+                            const EdgeInsets.symmetric(
+                          vertical: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // ==================================================
+              // INPUT
+              // ==================================================
+
+              Container(
+                padding:
+                    const EdgeInsets.fromLTRB(
+                  14,
+                  10,
+                  14,
+                  14,
+                ),
+                decoration:
+                    const BoxDecoration(
+                  color:
+                      Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          Color(
+                        0x12000000,
+                      ),
+                      blurRadius:
+                          12,
+                      offset:
+                          Offset(
+                        0,
+                        -3,
+                      ),
+                    ),
+                  ],
+                ),
+                child:
+                    Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child:
+                          TextField(
+                        controller:
+                            controller,
+                        enabled:
+                            !loading,
+                        minLines:
+                            1,
+                        maxLines:
+                            4,
+                        textInputAction:
+                            TextInputAction.send,
+                        onSubmitted:
+                            (_) {
+                          if (!loading) {
+                            sendMessage();
+                          }
+                        },
+                        decoration:
+                            InputDecoration(
+                          hintText:
+                              'Ask Faith AI about styles, prices, colors, or availability...',
+                          filled:
+                              true,
+                          fillColor:
+                              pageBackground,
+                          prefixIcon:
+                              const Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            color:
+                                deepGold,
+                          ),
+                          border:
+                              OutlineInputBorder(
+                            borderRadius:
+                                BorderRadius.circular(
+                              22,
+                            ),
+                            borderSide:
+                                const BorderSide(
+                              color:
+                                  borderGold,
+                            ),
+                          ),
+                          enabledBorder:
+                              OutlineInputBorder(
+                            borderRadius:
+                                BorderRadius.circular(
+                              22,
+                            ),
+                            borderSide:
+                                const BorderSide(
+                              color:
+                                  borderGold,
+                            ),
+                          ),
+                          focusedBorder:
+                              OutlineInputBorder(
+                            borderRadius:
+                                BorderRadius.circular(
+                              22,
+                            ),
+                            borderSide:
+                                const BorderSide(
+                              color:
+                                  gold,
+                              width: 1.8,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(
+                      width: 10,
+                    ),
+                    FilledButton(
+                      onPressed:
+                          loading
+                              ? null
+                              : () =>
+                                  sendMessage(),
+                      style:
+                          FilledButton.styleFrom(
+                        backgroundColor:
+                            gold,
+                        foregroundColor:
+                            navy,
+                        minimumSize:
+                            const Size(
+                          56,
+                          56,
+                        ),
+                        padding:
+                            EdgeInsets.zero,
+                        shape:
+                            const CircleBorder(),
+                      ),
+                      child:
+                          const Icon(
+                        Icons.send_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
