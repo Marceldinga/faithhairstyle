@@ -16,11 +16,13 @@ class _AIChatPageState extends State<AIChatPage> {
   final ScrollController scrollController = ScrollController();
   final supabase = Supabase.instance.client;
 
+  // DinMax AI production backend.
   final String functionUrl =
-      'https://lowqtmndtkgwmnyhqszp.supabase.co/functions/v1/chat-assistant';
+      'https://dinmax-ai-production.up.railway.app/chat';
 
-  final String anonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxvd3F0bW5kdGtnd21ueWhxc3pwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODgzMjQsImV4cCI6MjA4ODY2NDMyNH0.DAD_IfgcnXSnMfhu0MCl-CBVIVIEUSe9Yh7JbdvOhtw';
+  // Faith Hair Style customer contact.
+  static const String contactNumber = '3015419875';
+  static const String displayContactNumber = '+1 301-541-9875';
 
   List<Map<String, String>> messages = [];
   List<Map<String, dynamic>> services = [];
@@ -40,7 +42,7 @@ class _AIChatPageState extends State<AIChatPage> {
     messages.add({
       'role': 'assistant',
       'text':
-          'Hello, I am FaithCo. I can help you choose a hairstyle, check prices, explain hair colors, and book your appointment.',
+          'Hello! I am the Faith Hair Style AI Assistant powered by DinMax AI. I can help you choose a hairstyle, check prices, explain hair colors, and book your appointment. Call or text +1 301-541-9875 for direct assistance.',
     });
     loadSalonData();
   }
@@ -204,11 +206,14 @@ class _AIChatPageState extends State<AIChatPage> {
         Uri.parse(functionUrl),
         headers: {
           'Content-Type': 'application/json',
-          'apikey': anonKey,
-          'Authorization': 'Bearer $anonKey',
         },
         body: jsonEncode({
           'message': text,
+          'business': 'Faith Hair Style',
+          'location': 'Riverdale, Maryland',
+          'contact': displayContactNumber,
+          'instructions':
+              'You are the Faith Hair Style AI assistant. Help customers with hairstyles, prices, hair colors, preparation, and booking. Use the provided live service data for prices and durations. Do not invent prices. Keep answers professional, friendly, and concise. For direct help, tell customers they can call or text $displayContactNumber.',
           'services': services.map((s) {
             return {
               'name': s['name']?.toString() ?? '',
@@ -237,7 +242,11 @@ class _AIChatPageState extends State<AIChatPage> {
 
       if (response.body.isNotEmpty) {
         final data = jsonDecode(response.body);
-        reply = data['reply']?.toString() ?? reply;
+        reply = data['reply']?.toString() ??
+            data['response']?.toString() ??
+            data['answer']?.toString() ??
+            data['message']?.toString() ??
+            reply;
       }
 
       final detectedService = findServiceFromText(reply);
@@ -282,7 +291,7 @@ class _AIChatPageState extends State<AIChatPage> {
               isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Text(
-              isUser ? 'You' : 'FaithCo AI Assistant',
+              isUser ? 'You' : 'Faith Hair Style AI',
               style: TextStyle(
                 color: isUser ? Colors.white70 : primaryPink,
                 fontSize: 12,
@@ -323,7 +332,7 @@ class _AIChatPageState extends State<AIChatPage> {
   Widget build(BuildContext context) {
     if (loadingData) {
       return Scaffold(
-        appBar: AppBar(title: const Text('FaithCo')),
+        appBar: AppBar(title: const Text('Faith Hair Style AI')),
         body: Center(child: CircularProgressIndicator(color: primaryPink)),
       );
     }
@@ -331,7 +340,7 @@ class _AIChatPageState extends State<AIChatPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F5F7),
       appBar: AppBar(
-        title: const Text('FaithCo AI Assistant'),
+        title: const Text('Faith Hair Style AI Assistant'),
         backgroundColor: primaryPink,
         foregroundColor: Colors.white,
       ),
@@ -346,7 +355,7 @@ class _AIChatPageState extends State<AIChatPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'How can FaithCo help?',
+                    'How can Faith Hair Style help?',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 26,
@@ -355,7 +364,7 @@ class _AIChatPageState extends State<AIChatPage> {
                   ),
                   SizedBox(height: 6),
                   Text(
-                    'Ask about styles, prices, colors, or say “book it for me.”',
+                    'Ask about styles, prices, colors, booking, or call/text +1 301-541-9875.',
                     style: TextStyle(color: Colors.white70),
                   ),
                 ],
@@ -396,7 +405,7 @@ class _AIChatPageState extends State<AIChatPage> {
                       maxLines: 4,
                       onSubmitted: (_) => sendMessage(),
                       decoration: InputDecoration(
-                        hintText: 'Ask FaithCo for help...',
+                        hintText: 'Ask Faith Hair Style AI...',
                         filled: true,
                         fillColor: softPink,
                         border: OutlineInputBorder(
