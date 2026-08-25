@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:audioplayers/audioplayers.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
@@ -21,6 +23,7 @@ const bookingUrl =
 const heroVideoUrl =
     'https://lowqtmndtkgwmnyhqszp.supabase.co/storage/v1/object/public/faith-videos/faith-hairstyle-hero.mp4';
 const dinMaxAiUrl = 'https://dinmax-ai-production.up.railway.app/chat';
+const dinMaxTtsUrl = 'https://dinmax-ai-production.up.railway.app/tts';
 
 // Faith Hair Style luxury business palette.
 const kPrimary = Color(0xFFE4AD16); // Shining salon gold
@@ -1896,161 +1899,135 @@ class AiPage extends StatelessWidget {
   }
 }
 
-class FaithAICopilotFloating extends StatefulWidget {
-  final ValueChanged<Map<String, dynamic>> onBook;
-  final double bottomOffset;
+class CustomerPreferences {
+  String? budget;
+  String? length;
+  String? size;
+  String? color;
+  String? occasion;
+  String? datePreference;
 
-  const FaithAICopilotFloating({
-    super.key,
-    required this.onBook,
-    this.bottomOffset = 18,
-  });
+  bool get isEmpty =>
+      budget == null &&
+      length == null &&
+      size == null &&
+      color == null &&
+      occasion == null &&
+      datePreference == null;
 
-  @override
-  State<FaithAICopilotFloating> createState() =>
-      _FaithAICopilotFloatingState();
-}
+  String toPromptContext() {
+    if (isEmpty) return 'No preferences captured yet.';
+    final values = <String>[];
+    if (budget != null) values.add('Budget: $budget');
+    if (length != null) values.add('Length: $length');
+    if (size != null) values.add('Size: $size');
+    if (color != null) values.add('Color: $color');
+    if (occasion != null) values.add('Occasion: $occasion');
+    if (datePreference != null) {
+      values.add('Date/time preference: $datePreference');
+    }
+    return values.join('\n');
+  }
 
-class _FaithAICopilotFloatingState extends State<FaithAICopilotFloating> {
-  bool open = false;
-  bool minimized = false;
+  void absorb(String text) {
+    final lower = text.toLowerCase();
 
-  @override
-  Widget build(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
-    final panelWidth = min(430.0, max(300.0, screen.width - 24));
-    final panelHeight = min(650.0, max(460.0, screen.height - 120));
+    final budgetMatch = RegExp(
+      r'(?:\$\s*|budget(?:\s+is|\s+of|\s+around|\s+about|\s+under)?\s*\$?)(\d{2,4})',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (budgetMatch != null) budget = '\$${budgetMatch.group(1)}';
 
-    return Positioned(
-      right: 12,
-      bottom: widget.bottomOffset,
-      child: SafeArea(
-        child: Material(
-          color: Colors.transparent,
-          child: Stack(
-            alignment: Alignment.bottomRight,
-            children: [
-              Offstage(
-                offstage: !open || minimized,
-                child: SizedBox(
-                  width: panelWidth,
-                  height: panelHeight,
-                  child: FaithAICopilotPanel(
-                    onBook: (service) {
-                      widget.onBook(service);
-                      setState(() {
-                        open = false;
-                        minimized = false;
-                      });
-                    },
-                    onMinimize: () => setState(() => minimized = true),
-                    onClose: () => setState(() {
-                      open = false;
-                      minimized = false;
-                    }),
-                  ),
-                ),
-              ),
-              if (!open || minimized)
-                InkWell(
-                  onTap: () => setState(() {
-                    open = true;
-                    minimized = false;
-                  }),
-                  borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 58),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [kInk, kRoyalBlue],
-                      ),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: kPrimary, width: 1.4),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: .22),
-                          blurRadius: 22,
-                          offset: const Offset(0, 9),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const CircleAvatar(
-                          radius: 19,
-                          backgroundColor: kPrimary,
-                          child: Icon(
-                            Icons.auto_awesome_rounded,
-                            color: kInk,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Faith AI',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 14,
-                              ),
-                            ),
-                            Text(
-                              open ? 'Continue your chat' : 'Ask your salon copilot',
-                              style: const TextStyle(
-                                color: Color(0xFFFFD761),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
+    const lengths = [
+      'shoulder',
+      'midback',
+      'mid back',
+      'waist',
+      'top butt',
+      'mid butt',
+      'under butt',
+      'butt length',
+    ];
+    for (final value in lengths) {
+      if (lower.contains(value)) length = value;
+    }
+
+    const sizes = [
+      'jumbo',
+      'large',
+      'small medium',
+      'semi-medium',
+      'semi medium',
+      'medium',
+      'small',
+    ];
+    for (final value in sizes) {
+      if (lower.contains(value)) size = value;
+    }
+
+    final colorMatch = RegExp(
+      r'(?:color|colour)\s*(?:#|number|no\.?|code)?\s*([0-9]{1,3}[a-z]?)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (colorMatch != null) color = colorMatch.group(1);
+
+    const occasions = [
+      'birthday',
+      'wedding',
+      'vacation',
+      'work',
+      'school',
+      'party',
+      'photoshoot',
+      'photo shoot',
+    ];
+    for (final value in occasions) {
+      if (lower.contains(value)) occasion = value;
+    }
+
+    const dateWords = [
+      'today',
+      'tomorrow',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+      'morning',
+      'afternoon',
+      'evening',
+    ];
+    final mentioned = dateWords.where(lower.contains).toList();
+    if (mentioned.isNotEmpty) datePreference = mentioned.join(', ');
   }
 }
 
-class FaithAICopilotPanel extends StatefulWidget {
-  final ValueChanged<Map<String, dynamic>> onBook;
-  final VoidCallback? onMinimize;
-  final VoidCallback? onClose;
-  final bool fullPage;
+class FaithCopilotMessage {
+  final bool isBot;
+  final String text;
 
-  const FaithAICopilotPanel({
-    super.key,
-    required this.onBook,
-    this.onMinimize,
-    this.onClose,
-    this.fullPage = false,
-  });
-
-  @override
-  State<FaithAICopilotPanel> createState() => _FaithAICopilotPanelState();
+  const FaithCopilotMessage.bot(this.text) : isBot = true;
+  const FaithCopilotMessage.user(this.text) : isBot = false;
 }
 
-class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
-  final supabase = Supabase.instance.client;
-  final input = TextEditingController();
-  final scrollController = ScrollController();
+class FaithCopilotController extends ChangeNotifier {
+  final SupabaseClient supabase;
+  final http.Client httpClient;
 
-  final messages = <Map<String, String>>[
-    {
-      'bot':
-          'Hi! I’m Faith AI, your salon copilot. Tell me the style you want, your budget, preferred length, or when you want to come in. I’ll help you narrow it down and get ready to book.'
-    }
+  FaithCopilotController({
+    SupabaseClient? supabase,
+    http.Client? httpClient,
+  })  : supabase = supabase ?? Supabase.instance.client,
+        httpClient = httpClient ?? http.Client();
+
+  final CustomerPreferences preferences = CustomerPreferences();
+
+  final List<FaithCopilotMessage> messages = [
+    const FaithCopilotMessage.bot(
+      'Hi! I’m Faith AI, your salon copilot. Tell me the style you want, your budget, preferred length, or when you want to come in. I’ll help you narrow it down and get ready to book.',
+    ),
   ];
 
   List<Map<String, dynamic>> services = [];
@@ -2062,41 +2039,31 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   bool aiThinking = false;
   bool showBookingAction = false;
   String? lastSuggestedService;
+  DateTime? _lastSendAt;
+  bool _disposed = false;
 
-  String? rememberedBudget;
-  String? rememberedLength;
-  String? rememberedSize;
-  String? rememberedColor;
-  String? rememberedOccasion;
-  String? rememberedDatePreference;
+  bool get canSend => !aiThinking && !loadingData;
 
   @override
-  void initState() {
-    super.initState();
-    loadCopilotData();
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
   }
 
-  @override
-  void dispose() {
-    input.dispose();
-    scrollController.dispose();
-    super.dispose();
-  }
-
-  String dateOnly(DateTime date) {
+  String _dateOnly(DateTime date) {
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> loadCopilotData() async {
-    if (mounted) setState(() => loadingData = true);
+    loadingData = true;
+    notifyListeners();
 
     List<Map<String, dynamic>> loadedServices = [];
     List<Map<String, dynamic>> loadedColors = [];
     List<Map<String, dynamic>> loadedAvailability = [];
     List<Map<String, dynamic>> loadedBookings = [];
-    final today = dateOnly(DateTime.now());
+    final today = _dateOnly(DateTime.now());
 
     try {
       final result = await supabase
@@ -2152,17 +2119,15 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       loadedBookings = List<Map<String, dynamic>>.from(result);
     } catch (_) {}
 
-    if (!mounted) return;
-    setState(() {
-      services = loadedServices;
-      hairColors = loadedColors;
-      availabilitySlots = loadedAvailability;
-      safeBookings = loadedBookings;
-      loadingData = false;
-    });
+    services = loadedServices;
+    hairColors = loadedColors;
+    availabilitySlots = loadedAvailability;
+    safeBookings = loadedBookings;
+    loadingData = false;
+    notifyListeners();
   }
 
-  String money(dynamic value) {
+  String _money(dynamic value) {
     if (value == null) return 'not listed';
     final parsed = double.tryParse(value.toString());
     if (parsed == null) return value.toString();
@@ -2172,7 +2137,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     return '\$${parsed.toStringAsFixed(2)}';
   }
 
-  String durationText(dynamic value) {
+  String _durationText(dynamic value) {
     final minutes = int.tryParse(value?.toString() ?? '');
     if (minutes == null || minutes <= 0) return 'not listed';
     final hours = minutes ~/ 60;
@@ -2182,7 +2147,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     return '$hours hr $remainder min';
   }
 
-  String buildServiceContext() {
+  String _buildServiceContext() {
     if (services.isEmpty) {
       return 'No live service records are currently available.';
     }
@@ -2192,13 +2157,13 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       final description = (service['description'] ?? '').toString().trim();
       final imageAvailable =
           (service['image_url'] ?? '').toString().trim().isNotEmpty;
-      return '- $name | category: $category | starting price: ${money(service['price'])} | '
-          'duration: ${durationText(service['duration_minutes'])} | '
+      return '- $name | category: $category | starting price: ${_money(service['price'])} | '
+          'duration: ${_durationText(service['duration_minutes'])} | '
           'description: $description | image available: $imageAvailable';
     }).join('\n');
   }
 
-  String buildColorContext() {
+  String _buildColorContext() {
     if (hairColors.isEmpty) {
       return 'No live hair-color records are currently available.';
     }
@@ -2209,7 +2174,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     }).join('\n');
   }
 
-  String buildAvailabilityContext() {
+  String _buildAvailabilityContext() {
     if (availabilitySlots.isNotEmpty) {
       return availabilitySlots.take(60).map((slot) {
         return '- ${slot['slot_date']} | ${slot['start_time']} to ${slot['end_time']}';
@@ -2223,7 +2188,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
         'Do not claim a specific time is available unless the booking system verifies it.';
   }
 
-  String serviceNameForId(dynamic id) {
+  String _serviceNameForId(dynamic id) {
     for (final service in services) {
       if (service['id']?.toString() == id?.toString()) {
         return (service['name'] ?? 'Service').toString();
@@ -2232,119 +2197,27 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     return 'Service';
   }
 
-  String buildSafeBookingContext() {
+  String _buildSafeBookingContext() {
     if (safeBookings.isEmpty) {
       return 'No customer-safe future booking occupancy records were returned.';
     }
 
     return safeBookings.take(60).map((booking) {
-      final serviceName = serviceNameForId(booking['service_id']);
+      final serviceName = _serviceNameForId(booking['service_id']);
       return '- $serviceName | date: ${booking['booking_date']} | '
           'time: ${booking['start_time']} to ${booking['end_time']} | '
           'status: ${booking['status']} | color code: ${booking['hair_color_code'] ?? ''}';
     }).join('\n');
   }
 
-  String buildChatHistory() {
+  String _buildChatHistory() {
     final recent = messages.length > 18
         ? messages.sublist(messages.length - 18)
         : messages;
-
-    return recent.map((message) {
-      if (message.containsKey('user')) {
-        return 'Customer: ${message['user']}';
-      }
-      return 'Faith AI: ${message['bot']}';
-    }).join('\n');
-  }
-
-  String buildCustomerMemory() {
-    final values = <String>[];
-    if (rememberedBudget != null) values.add('Budget: $rememberedBudget');
-    if (rememberedLength != null) values.add('Length: $rememberedLength');
-    if (rememberedSize != null) values.add('Size: $rememberedSize');
-    if (rememberedColor != null) values.add('Color: $rememberedColor');
-    if (rememberedOccasion != null) values.add('Occasion: $rememberedOccasion');
-    if (rememberedDatePreference != null) {
-      values.add('Date/time preference: $rememberedDatePreference');
-    }
-    return values.isEmpty ? 'No preferences captured yet.' : values.join('\n');
-  }
-
-  void rememberCustomerPreferences(String text) {
-    final lower = text.toLowerCase();
-
-    final budgetMatch = RegExp(
-      r'(?:\$\s*|budget(?:\s+is|\s+of|\s+around|\s+about|\s+under)?\s*\$?)(\d{2,4})',
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (budgetMatch != null) {
-      rememberedBudget = '\$${budgetMatch.group(1)}';
-    }
-
-    const lengths = [
-      'shoulder',
-      'midback',
-      'mid back',
-      'waist',
-      'top butt',
-      'mid butt',
-      'under butt',
-      'butt length',
-    ];
-    for (final value in lengths) {
-      if (lower.contains(value)) rememberedLength = value;
-    }
-
-    const sizes = [
-      'jumbo',
-      'large',
-      'medium',
-      'small medium',
-      'semi-medium',
-      'semi medium',
-      'small',
-    ];
-    for (final value in sizes) {
-      if (lower.contains(value)) rememberedSize = value;
-    }
-
-    final colorMatch = RegExp(
-      r'(?:color|colour)\s*(?:#|number|no\.?|code)?\s*([0-9]{1,3}[a-z]?)',
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (colorMatch != null) rememberedColor = colorMatch.group(1);
-
-    const occasions = [
-      'birthday',
-      'wedding',
-      'vacation',
-      'work',
-      'school',
-      'party',
-      'photoshoot',
-      'photo shoot',
-    ];
-    for (final value in occasions) {
-      if (lower.contains(value)) rememberedOccasion = value;
-    }
-
-    const dateWords = [
-      'today',
-      'tomorrow',
-      'monday',
-      'tuesday',
-      'wednesday',
-      'thursday',
-      'friday',
-      'saturday',
-      'sunday',
-      'morning',
-      'afternoon',
-      'evening',
-    ];
-    final mentioned = dateWords.where(lower.contains).toList();
-    if (mentioned.isNotEmpty) rememberedDatePreference = mentioned.join(', ');
+    return recent
+        .map((message) =>
+            '${message.isBot ? 'Faith AI' : 'Customer'}: ${message.text}')
+        .join('\n');
   }
 
   Map<String, dynamic>? findServiceFromText(String text) {
@@ -2378,11 +2251,10 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       }).toList();
       if (matches.isNotEmpty) return matches.first;
     }
-
     return null;
   }
 
-  bool isBookingIntent(String text) {
+  bool _isBookingIntent(String text) {
     final lower = text.toLowerCase();
     return lower.contains('book') ||
         lower.contains('appointment') ||
@@ -2393,7 +2265,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
         lower.contains('ready');
   }
 
-  String buildDinMaxPrompt(String customerMessage) {
+  String _buildDinMaxPrompt(String customerMessage) {
     return '''
 You are Faith AI Copilot, the intelligent customer assistant for Faith Hair Style.
 
@@ -2454,34 +2326,35 @@ COPILOT BEHAVIOR
 RESPONSE STYLE
 - Friendly, polished, confident, customer-focused.
 - Usually 2-5 short sentences.
+- Use **bold** for service names, prices, and important choices when useful.
 - Use bullets for comparisons or appointment choices.
 - Do not end every answer with generic filler.
 - Do not introduce yourself as DinMax, a coding assistant, or a study assistant.
 
 CUSTOMER MEMORY
-${buildCustomerMemory()}
+${preferences.toPromptContext()}
 
 LIVE SERVICES
-${buildServiceContext()}
+${_buildServiceContext()}
 
 LIVE HAIR COLORS
-${buildColorContext()}
+${_buildColorContext()}
 
 LIVE AVAILABILITY
-${buildAvailabilityContext()}
+${_buildAvailabilityContext()}
 
 SAFE BOOKING OCCUPANCY
-${buildSafeBookingContext()}
+${_buildSafeBookingContext()}
 
 RECENT CONVERSATION
-${buildChatHistory()}
+${_buildChatHistory()}
 
 CUSTOMER MESSAGE
 $customerMessage
 ''';
   }
 
-  String extractAiText(dynamic data) {
+  String _extractAiText(dynamic data) {
     if (data is String && data.trim().isNotEmpty) return data.trim();
 
     if (data is Map) {
@@ -2496,9 +2369,7 @@ $customerMessage
       ];
       for (final key in keys) {
         final value = data[key];
-        if (value is String && value.trim().isNotEmpty) {
-          return value.trim();
-        }
+        if (value is String && value.trim().isNotEmpty) return value.trim();
       }
 
       final choices = data['choices'];
@@ -2513,15 +2384,13 @@ $customerMessage
         }
       }
     }
-
     return '';
   }
 
-  Future<String> askDinMaxAi(String customerMessage) async {
-    final prompt = buildDinMaxPrompt(customerMessage);
-
+  Future<String> _askDinMaxAi(String customerMessage) async {
+    final prompt = _buildDinMaxPrompt(customerMessage);
     try {
-      final response = await http
+      final response = await httpClient
           .post(
             Uri.parse(dinMaxAiUrl),
             headers: const {
@@ -2539,12 +2408,10 @@ $customerMessage
         } catch (_) {
           data = response.body;
         }
-
-        final answer = extractAiText(data);
+        final answer = _extractAiText(data);
         if (answer.isNotEmpty) return answer;
         return 'I received your question, but I could not read the AI response. Please try again.';
       }
-
       return 'Faith AI is temporarily unavailable (${response.statusCode}). Please try again shortly.';
     } on TimeoutException {
       return 'Faith AI is taking longer than expected. Please try again.';
@@ -2553,22 +2420,25 @@ $customerMessage
     }
   }
 
-  Future<void> send([String? preset]) async {
-    final text = (preset ?? input.text).trim();
-    if (text.isEmpty || aiThinking) return;
+  Future<bool> send(String rawText) async {
+    final text = rawText.trim();
+    if (text.isEmpty || aiThinking) return false;
 
-    rememberCustomerPreferences(text);
+    final now = DateTime.now();
+    if (_lastSendAt != null &&
+        now.difference(_lastSendAt!) < const Duration(milliseconds: 450)) {
+      return false;
+    }
+    _lastSendAt = now;
 
-    setState(() {
-      messages.add({'user': text});
-      input.clear();
-      aiThinking = true;
-      showBookingAction = showBookingAction || isBookingIntent(text);
-    });
-    scrollToBottom();
+    preferences.absorb(text);
+    messages.add(FaithCopilotMessage.user(text));
+    aiThinking = true;
+    showBookingAction = showBookingAction || _isBookingIntent(text);
+    notifyListeners();
 
-    final answer = await askDinMaxAi(text);
-    if (!mounted) return;
+    final answer = await _askDinMaxAi(text);
+    if (_disposed) return false;
 
     final detectedService = findServiceFromText('$text $answer');
     if (detectedService != null) {
@@ -2576,28 +2446,16 @@ $customerMessage
     }
 
     final lowerAnswer = answer.toLowerCase();
-    if (isBookingIntent(answer) ||
+    if (_isBookingIntent(answer) ||
         lowerAnswer.contains('book this style') ||
         lowerAnswer.contains('tap book')) {
       showBookingAction = true;
     }
 
-    setState(() {
-      messages.add({'bot': answer});
-      aiThinking = false;
-    });
-    scrollToBottom();
-  }
-
-  void scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!scrollController.hasClients) return;
-      scrollController.animateTo(
-        scrollController.position.maxScrollExtent + 160,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOut,
-      );
-    });
+    messages.add(FaithCopilotMessage.bot(answer));
+    aiThinking = false;
+    notifyListeners();
+    return true;
   }
 
   Map<String, dynamic>? selectedServiceForBooking() {
@@ -2608,26 +2466,446 @@ $customerMessage
     return null;
   }
 
-  void openBooking() {
-    final service = selectedServiceForBooking();
+  void addChooseStyleMessage() {
+    messages.add(
+      const FaithCopilotMessage.bot(
+        'Tell me which hairstyle you want first. I can recommend one from your budget, length, size, and preferred time.',
+      ),
+    );
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    httpClient.close();
+    super.dispose();
+  }
+}
+
+class FaithAICopilotFloating extends StatefulWidget {
+  final ValueChanged<Map<String, dynamic>> onBook;
+  final double bottomOffset;
+
+  const FaithAICopilotFloating({
+    super.key,
+    required this.onBook,
+    this.bottomOffset = 18,
+  });
+
+  @override
+  State<FaithAICopilotFloating> createState() =>
+      _FaithAICopilotFloatingState();
+}
+
+class _FaithAICopilotFloatingState extends State<FaithAICopilotFloating> {
+  bool open = false;
+  bool minimized = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final panelWidth = min(430.0, max(300.0, screen.width - 24));
+    final panelHeight = min(650.0, max(460.0, screen.height - 120));
+    final showPanel = open && !minimized;
+
+    return Positioned(
+      right: 12,
+      bottom: widget.bottomOffset,
+      child: SafeArea(
+        child: Material(
+          color: Colors.transparent,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            reverseDuration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final slide = Tween<Offset>(
+                begin: const Offset(0, .06),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: slide, child: child),
+              );
+            },
+            child: showPanel
+                ? SizedBox(
+                    key: const ValueKey('faith-ai-panel'),
+                    width: panelWidth,
+                    height: panelHeight,
+                    child: FaithAICopilotPanel(
+                      onBook: (service) {
+                        widget.onBook(service);
+                        setState(() {
+                          open = false;
+                          minimized = false;
+                        });
+                      },
+                      onMinimize: () => setState(() => minimized = true),
+                      onClose: () => setState(() {
+                        open = false;
+                        minimized = false;
+                      }),
+                    ),
+                  )
+                : InkWell(
+                    key: const ValueKey('faith-ai-launcher'),
+                    onTap: () => setState(() {
+                      open = true;
+                      minimized = false;
+                    }),
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 58),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 15,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [kInk, kRoyalBlue],
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: kPrimary, width: 1.4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: .22),
+                            blurRadius: 22,
+                            offset: const Offset(0, 9),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircleAvatar(
+                            radius: 19,
+                            backgroundColor: kPrimary,
+                            child: Icon(
+                              Icons.auto_awesome_rounded,
+                              color: kInk,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Faith AI',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Text(
+                                open
+                                    ? 'Continue your chat'
+                                    : 'Ask your salon copilot',
+                                style: const TextStyle(
+                                  color: Color(0xFFFFD761),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class FaithAICopilotPanel extends StatefulWidget {
+  final ValueChanged<Map<String, dynamic>> onBook;
+  final VoidCallback? onMinimize;
+  final VoidCallback? onClose;
+  final bool fullPage;
+
+  const FaithAICopilotPanel({
+    super.key,
+    required this.onBook,
+    this.onMinimize,
+    this.onClose,
+    this.fullPage = false,
+  });
+
+  @override
+  State<FaithAICopilotPanel> createState() => _FaithAICopilotPanelState();
+}
+
+class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
+  late final FaithCopilotController controller;
+  final input = TextEditingController();
+  final scrollController = ScrollController();
+  final stt.SpeechToText speech = stt.SpeechToText();
+  final AudioPlayer neuralVoicePlayer = AudioPlayer();
+  StreamSubscription<void>? _voiceCompleteSubscription;
+  bool speechReady = false;
+  bool isListening = false;
+  bool speakReplies = true;
+  bool isSpeaking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = FaithCopilotController();
+    controller.addListener(_onControllerChanged);
+    _initializeNeuralVoice();
+    controller.loadCopilotData();
+  }
+
+  void _onControllerChanged() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_onControllerChanged);
+    controller.dispose();
+    speech.stop();
+    _voiceCompleteSubscription?.cancel();
+    neuralVoicePlayer.dispose();
+    input.dispose();
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    if (!scrollController.hasClients) return;
+    scrollController.animateTo(
+      scrollController.position.maxScrollExtent + 160,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _initializeNeuralVoice() async {
+    _voiceCompleteSubscription?.cancel();
+    _voiceCompleteSubscription = neuralVoicePlayer.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() => isSpeaking = false);
+    });
+  }
+
+  String _plainSpeechText(String text) {
+    var cleaned = text;
+
+    cleaned = cleaned.replaceAll(
+      RegExp(r'!\[[^\]]*\]\([^\)]*\)'),
+      '',
+    );
+    cleaned = cleaned.replaceAll('**', '');
+    cleaned = cleaned.replaceAll(RegExp(r'https?://\S+'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^\s*[*•-]\s*', multiLine: true), '');
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+    cleaned = cleaned.replaceAll(' - ', '. ');
+    cleaned = cleaned.replaceAll(' • ', '. ');
+
+    return cleaned;
+  }
+
+  Future<void> _speakText(String text) async {
+    if (!speakReplies) return;
+
+    final spokenText = _plainSpeechText(text);
+    if (spokenText.isEmpty) return;
+
+    try {
+      await neuralVoicePlayer.stop();
+
+      if (mounted) {
+        setState(() => isSpeaking = true);
+      }
+
+      final response = await http
+          .post(
+            Uri.parse(dinMaxTtsUrl),
+            headers: const {
+              'Content-Type': 'application/json',
+              'Accept': 'audio/mpeg',
+            },
+            body: jsonEncode({
+              'text': spokenText,
+              'voice': 'en-US-JennyNeural',
+              'rate': '+10%',
+              'pitch': '+2Hz',
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Voice server returned ${response.statusCode}');
+      }
+
+      if (response.bodyBytes.isEmpty) {
+        throw Exception('Voice server returned empty audio');
+      }
+
+      await neuralVoicePlayer.play(BytesSource(response.bodyBytes));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => isSpeaking = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Faith AI voice is temporarily unavailable. The text reply still works.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _stopSpeaking() async {
+    await neuralVoicePlayer.stop();
+    if (!mounted) return;
+    setState(() => isSpeaking = false);
+  }
+
+  Future<void> _toggleSpeakReplies() async {
+    if (speakReplies) {
+      await _stopSpeaking();
+    }
+    if (!mounted) return;
+    setState(() => speakReplies = !speakReplies);
+  }
+
+  Future<void> _initializeSpeech() async {
+    if (speechReady) return;
+    try {
+      final available = await speech.initialize(
+        onStatus: (status) {
+          if (!mounted) return;
+          if (status == 'done' || status == 'notListening') {
+            setState(() => isListening = false);
+          }
+        },
+        onError: (_) {
+          if (!mounted) return;
+          setState(() => isListening = false);
+        },
+      );
+      if (!mounted) return;
+      setState(() => speechReady = available);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => speechReady = false);
+    }
+  }
+
+  Future<void> _toggleVoiceInput() async {
+    if (controller.aiThinking) return;
+
+    if (isListening) {
+      await speech.stop();
+      if (mounted) setState(() => isListening = false);
+      return;
+    }
+
+    await _initializeSpeech();
+
+    if (!speechReady) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Voice input is unavailable. Allow microphone access and try again.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => isListening = true);
+
+    await speech.listen(
+      listenMode: stt.ListenMode.dictation,
+      partialResults: true,
+      cancelOnError: true,
+      onResult: (result) {
+        if (!mounted) return;
+        final words = result.recognizedWords.trim();
+        if (words.isNotEmpty) {
+          input.value = TextEditingValue(
+            text: words,
+            selection: TextSelection.collapsed(offset: words.length),
+          );
+        }
+        if (result.finalResult) {
+          setState(() => isListening = false);
+        }
+      },
+    );
+  }
+
+  Future<void> _send([String? preset]) async {
+    final text = (preset ?? input.text).trim();
+    if (text.isEmpty || controller.aiThinking) return;
+
+    if (isListening) {
+      await speech.stop();
+      if (mounted) setState(() => isListening = false);
+    }
+
+    if (isSpeaking) {
+      await _stopSpeaking();
+    }
+
+    if (preset == null) input.clear();
+
+    final messageCountBefore = controller.messages.length;
+    final accepted = await controller.send(text);
+
+    if (!accepted && preset == null && mounted) {
+      input.text = text;
+      return;
+    }
+
+    if (!accepted || !speakReplies) return;
+
+    if (controller.messages.length > messageCountBefore) {
+      for (var i = controller.messages.length - 1;
+          i >= messageCountBefore;
+          i--) {
+        final message = controller.messages[i];
+        if (message.isBot) {
+          await _speakText(message.text);
+          break;
+        }
+      }
+    }
+  }
+
+  void _openBooking() {
+    final service = controller.selectedServiceForBooking();
     if (service == null) {
-      setState(() {
-        messages.add({
-          'bot':
-              'Tell me which hairstyle you want first. I can recommend one from your budget, length, size, and preferred time.'
-        });
-      });
-      scrollToBottom();
+      controller.addChooseStyleMessage();
       return;
     }
     widget.onBook(service);
   }
 
-  Widget quickChip(String label, IconData icon, String prompt) {
+  Widget _quickChip(
+    String label,
+    IconData icon,
+    String prompt,
+    bool disabled,
+  ) {
     return ActionChip(
       avatar: Icon(icon, size: 17, color: kPrimaryDark),
       label: Text(label),
-      onPressed: aiThinking ? null : () => send(prompt),
+      onPressed: disabled ? null : () => _send(prompt),
       backgroundColor: Colors.white,
       side: const BorderSide(color: kBorder),
       labelStyle: const TextStyle(
@@ -2638,16 +2916,14 @@ $customerMessage
     );
   }
 
-  Widget messageBubble(Map<String, String> message) {
-    final isBot = message.containsKey('bot');
+  Widget _messageBubble(FaithCopilotMessage message) {
+    final isBot = message.isBot;
     return Align(
       alignment: isBot ? Alignment.centerLeft : Alignment.centerRight,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 5),
         padding: const EdgeInsets.all(13),
-        constraints: BoxConstraints(
-          maxWidth: widget.fullPage ? 680 : 350,
-        ),
+        constraints: BoxConstraints(maxWidth: widget.fullPage ? 680 : 350),
         decoration: BoxDecoration(
           gradient: isBot
               ? null
@@ -2689,8 +2965,9 @@ $customerMessage
               ],
             ),
             const SizedBox(height: 5),
-            SelectableText(
-              isBot ? message['bot']! : message['user']!,
+            LightMarkdownText(
+              message.text,
+              selectable: true,
               style: const TextStyle(
                 color: kInk,
                 fontSize: 14,
@@ -2703,243 +2980,280 @@ $customerMessage
     );
   }
 
-  Widget buildCopilotBody() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [kInk, kDarkSurface, kRoyalBlue],
-            ),
-          ),
-          child: Row(
-            children: [
-              const CircleAvatar(
-                radius: 20,
-                backgroundColor: kPrimary,
-                child: Icon(
-                  Icons.auto_awesome_rounded,
-                  color: kInk,
-                  size: 21,
+  Widget _buildCopilotBody() {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final disabled = controller.aiThinking || controller.loadingData;
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [kInk, kDarkSurface, kRoyalBlue],
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'FAITH AI COPILOT',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                      ),
+              child: Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 20,
+                    backgroundColor: kPrimary,
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      color: kInk,
+                      size: 21,
                     ),
-                    Text(
-                      loadingData
-                          ? 'Loading live salon information...'
-                          : 'Styles • prices • colors • timing • booking',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFFFD761),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: 'Refresh salon information',
-                onPressed: loadingData ? null : loadCopilotData,
-                icon: const Icon(
-                  Icons.refresh_rounded,
-                  color: Colors.white70,
-                  size: 20,
-                ),
-              ),
-              if (widget.onMinimize != null)
-                IconButton(
-                  tooltip: 'Minimize',
-                  onPressed: widget.onMinimize,
-                  icon: const Icon(
-                    Icons.remove_rounded,
-                    color: Colors.white,
-                    size: 22,
                   ),
-                ),
-              if (widget.onClose != null)
-                IconButton(
-                  tooltip: 'Close',
-                  onPressed: widget.onClose,
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 48,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            children: [
-              quickChip(
-                'Choose for me',
-                Icons.auto_awesome_rounded,
-                'Help me choose the best hairstyle. Ask only one useful question if you still need information.',
-              ),
-              const SizedBox(width: 7),
-              quickChip(
-                'Under my budget',
-                Icons.savings_outlined,
-                'Help me find hairstyles that fit my budget. Ask my budget only if I have not told you yet.',
-              ),
-              const SizedBox(width: 7),
-              quickChip(
-                'Compare',
-                Icons.compare_arrows_rounded,
-                'Compare up to three relevant live styles by starting price, duration, and look, then recommend one.',
-              ),
-              const SizedBox(width: 7),
-              quickChip(
-                'Open times',
-                Icons.schedule_rounded,
-                'Help me understand the next possible appointment times using live availability and booking information.',
-              ),
-              const SizedBox(width: 7),
-              quickChip(
-                'Colors',
-                Icons.palette_outlined,
-                'Show me the available hair color codes and names.',
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: ListView.builder(
-            controller: scrollController,
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            itemCount: messages.length + (aiThinking ? 1 : 0),
-            itemBuilder: (_, index) {
-              if (aiThinking && index == messages.length) {
-                return Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 5),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(17),
-                      border: Border.all(color: kBorder),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SizedBox(
-                          width: 15,
-                          height: 15,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Faith AI is thinking...',
+                        const Text(
+                          'FAITH AI COPILOT',
                           style: TextStyle(
-                            color: kMuted,
-                            fontSize: 12,
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          controller.loadingData
+                              ? 'Loading live salon information...'
+                              : 'Styles • prices • colors • timing • booking',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFFFD761),
+                            fontSize: 10.5,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
                     ),
                   ),
-                );
-              }
-              return messageBubble(messages[index]);
-            },
-          ),
-        ),
-        if (showBookingAction && !aiThinking)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: openBooking,
-                icon: const Icon(Icons.calendar_month_rounded),
-                label: Text(
-                  lastSuggestedService == null
-                      ? 'CHOOSE A STYLE TO BOOK'
-                      : 'BOOK ${lastSuggestedService!.toUpperCase()}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: kInk,
-                  foregroundColor: Colors.white,
-                ),
+                  IconButton(
+                    tooltip: speakReplies
+                        ? (isSpeaking ? 'Stop speaking' : 'Voice replies on')
+                        : 'Voice replies off',
+                    onPressed: isSpeaking
+                        ? _stopSpeaking
+                        : _toggleSpeakReplies,
+                    icon: Icon(
+                      speakReplies
+                          ? (isSpeaking
+                              ? Icons.stop_circle_rounded
+                              : Icons.volume_up_rounded)
+                          : Icons.volume_off_rounded,
+                      color: speakReplies ? kPrimary : Colors.white70,
+                      size: 21,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Refresh salon information',
+                    onPressed: controller.loadingData
+                        ? null
+                        : controller.loadCopilotData,
+                    icon: const Icon(
+                      Icons.refresh_rounded,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
+                  ),
+                  if (widget.onMinimize != null)
+                    IconButton(
+                      tooltip: 'Minimize',
+                      onPressed: widget.onMinimize,
+                      icon: const Icon(
+                        Icons.remove_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  if (widget.onClose != null)
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: widget.onClose,
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                ],
               ),
             ),
-          ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: kBorder)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: input,
-                  enabled: !aiThinking,
-                  minLines: 1,
-                  maxLines: 4,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) {
-                    if (!aiThinking) send();
-                  },
-                  decoration: const InputDecoration(
-                    hintText:
-                        'Ask Faith AI about styles, budget, colors, timing, or booking...',
-                    hintStyle: TextStyle(fontSize: 12.5),
-                    prefixIcon: Icon(Icons.chat_bubble_outline_rounded),
+            SizedBox(
+              height: 48,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                children: [
+                  _quickChip(
+                    'Choose for me',
+                    Icons.auto_awesome_rounded,
+                    'Help me choose the best hairstyle. Ask only one useful question if you still need information.',
+                    disabled,
+                  ),
+                  const SizedBox(width: 7),
+                  _quickChip(
+                    'Under my budget',
+                    Icons.savings_outlined,
+                    'Help me find hairstyles that fit my budget. Ask my budget only if I have not told you yet.',
+                    disabled,
+                  ),
+                  const SizedBox(width: 7),
+                  _quickChip(
+                    'Compare',
+                    Icons.compare_arrows_rounded,
+                    'Compare up to three relevant live styles by starting price, duration, and look, then recommend one.',
+                    disabled,
+                  ),
+                  const SizedBox(width: 7),
+                  _quickChip(
+                    'Open times',
+                    Icons.schedule_rounded,
+                    'Help me understand the next possible appointment times using live availability and booking information.',
+                    disabled,
+                  ),
+                  const SizedBox(width: 7),
+                  _quickChip(
+                    'Colors',
+                    Icons.palette_outlined,
+                    'Show me the available hair color codes and names.',
+                    disabled,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                itemCount: controller.messages.length +
+                    (controller.aiThinking ? 1 : 0),
+                itemBuilder: (_, index) {
+                  if (controller.aiThinking &&
+                      index == controller.messages.length) {
+                    return const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 5),
+                        child: AnimatedTypingIndicator(),
+                      ),
+                    );
+                  }
+                  return _messageBubble(controller.messages[index]);
+                },
+              ),
+            ),
+            if (controller.showBookingAction && !controller.aiThinking)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _openBooking,
+                    icon: const Icon(Icons.calendar_month_rounded),
+                    label: Text(
+                      controller.lastSuggestedService == null
+                          ? 'CHOOSE A STYLE TO BOOK'
+                          : 'BOOK ${controller.lastSuggestedService!.toUpperCase()}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kInk,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 48,
-                height: 48,
-                child: FilledButton(
-                  onPressed: aiThinking ? null : () => send(),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: kPrimary,
-                    foregroundColor: kInk,
-                    padding: EdgeInsets.zero,
-                    shape: const CircleBorder(),
-                  ),
-                  child: const Icon(Icons.send_rounded, size: 20),
-                ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: kBorder)),
               ),
-            ],
-          ),
-        ),
-      ],
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: input,
+                      enabled: !controller.aiThinking,
+                      minLines: 1,
+                      maxLines: 4,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) {
+                        if (!controller.aiThinking) _send();
+                      },
+                      decoration: InputDecoration(
+                        hintText: isListening
+                            ? 'Listening... speak now'
+                            : 'Ask Faith AI about styles, budget, colors, timing, or booking...',
+                        hintStyle: const TextStyle(fontSize: 12.5),
+                        prefixIcon: Icon(
+                          isListening
+                              ? Icons.graphic_eq_rounded
+                              : Icons.chat_bubble_outline_rounded,
+                          color: isListening ? Colors.red : kPrimaryDark,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: IconButton.filled(
+                      tooltip: isListening ? 'Stop listening' : 'Voice input',
+                      onPressed:
+                          controller.aiThinking ? null : _toggleVoiceInput,
+                      style: IconButton.styleFrom(
+                        backgroundColor:
+                            isListening ? Colors.red : Colors.white,
+                        foregroundColor:
+                            isListening ? Colors.white : kPrimaryDark,
+                        side: const BorderSide(color: kBorder),
+                      ),
+                      icon: Icon(
+                        isListening
+                            ? Icons.mic_rounded
+                            : Icons.mic_none_rounded,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: FilledButton(
+                      onPressed: controller.aiThinking ? null : () => _send(),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: kPrimary,
+                        foregroundColor: kInk,
+                        padding: EdgeInsets.zero,
+                        shape: const CircleBorder(),
+                      ),
+                      child: const Icon(Icons.send_rounded, size: 20),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final child = _buildCopilotBody();
     if (widget.fullPage) {
       return Container(
         constraints: const BoxConstraints(maxWidth: 900),
@@ -2949,7 +3263,7 @@ $customerMessage
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: kBorder),
         ),
-        child: buildCopilotBody(),
+        child: child,
       );
     }
 
@@ -2967,10 +3281,136 @@ $customerMessage
           ),
         ],
       ),
-      child: buildCopilotBody(),
+      child: child,
     );
   }
 }
+
+class LightMarkdownText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+  final bool selectable;
+
+  const LightMarkdownText(
+    this.text, {
+    super.key,
+    this.style,
+    this.selectable = false,
+  });
+
+  List<TextSpan> _parse() {
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'\*\*(.+?)\*\*', dotAll: true);
+    var cursor = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, match.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: match.group(1) ?? '',
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+      );
+      cursor = match.end;
+    }
+
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor)));
+    }
+    return spans;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rich = TextSpan(style: style, children: _parse());
+    if (selectable) return SelectableText.rich(rich);
+    return RichText(text: rich);
+  }
+}
+
+class AnimatedTypingIndicator extends StatefulWidget {
+  const AnimatedTypingIndicator({super.key});
+
+  @override
+  State<AnimatedTypingIndicator> createState() =>
+      _AnimatedTypingIndicatorState();
+}
+
+class _AnimatedTypingIndicatorState extends State<AnimatedTypingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double _dotOffset(double value, double phase) {
+    final shifted = (value + phase) % 1.0;
+    return -4 * sin(shifted * pi);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: kBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.auto_awesome_rounded,
+            size: 14,
+            color: kPrimaryDark,
+          ),
+          const SizedBox(width: 8),
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (_, __) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(3, (index) {
+                  return Transform.translate(
+                    offset: Offset(
+                      0,
+                      _dotOffset(_controller.value, index * .18),
+                    ),
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                      decoration: const BoxDecoration(
+                        color: kPrimaryDark,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 
 class LiveChatPage extends StatefulWidget {
   const LiveChatPage({super.key});
