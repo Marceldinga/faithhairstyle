@@ -236,7 +236,6 @@ class FaithAICopilotPanel extends StatefulWidget {
 
 class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   final TextEditingController _textController = TextEditingController();
-
   final ScrollController _scrollController = ScrollController();
 
   late final FaithCopilotController _controller;
@@ -250,11 +249,17 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   String? _speechError;
 
   // ============================================================
-  // VOICE DUPLICATION FIX
+  // VOICE RECOGNITION STATE
   // ============================================================
 
+  /// Text that was already inside the box before microphone starts.
   String _voiceTextBeforeListening = '';
-  String _lastFinalSpeech = '';
+
+  /// Last complete result received from the browser/plugin.
+  String _lastSpeechSnapshot = '';
+
+  /// Current clean speech phrase shown in the input box.
+  String _currentSpeechText = '';
 
   @override
   void initState() {
@@ -366,7 +371,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   }
 
   // ============================================================
-  // SPEECH CLEANER
+  // BASIC SPEECH CLEANER
   // ============================================================
 
   String _cleanSpeechResult(String input) {
@@ -381,41 +386,130 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       ' ',
     );
 
-    final sourceWords = text.split(' ');
-    final cleanedWords = <String>[];
-
-    for (final word in sourceWords) {
-      final value = word.trim();
-
-      if (value.isEmpty) {
-        continue;
-      }
-
-      if (cleanedWords.isNotEmpty &&
-          cleanedWords.last.toLowerCase() == value.toLowerCase()) {
-        continue;
-      }
-
-      cleanedWords.add(value);
-    }
-
-    text = cleanedWords.join(' ').trim();
-
-    final words = text.split(' ');
-
-    if (words.length >= 2 && words.length.isEven) {
-      final middle = words.length ~/ 2;
-
-      final first = words.sublist(0, middle).join(' ').trim();
-
-      final second = words.sublist(middle).join(' ').trim();
-
-      if (first.toLowerCase() == second.toLowerCase()) {
-        text = first;
-      }
-    }
-
     return text.trim();
+  }
+
+  // ============================================================
+  // WEB SPEECH DUPLICATION FIX
+  // ============================================================
+
+  String _extractLatestSpeechHypothesis(String rawSpeech) {
+    final raw = _cleanSpeechResult(rawSpeech);
+
+    if (raw.isEmpty) {
+      return _currentSpeechText;
+    }
+
+    // First result in this microphone session.
+    if (_lastSpeechSnapshot.isEmpty) {
+      _lastSpeechSnapshot = raw;
+      _currentSpeechText = raw;
+
+      return raw;
+    }
+
+    // Ignore exact repeated callbacks.
+    if (raw.toLowerCase() == _lastSpeechSnapshot.toLowerCase()) {
+      return _currentSpeechText;
+    }
+
+    var latest = raw;
+
+    // ==========================================================
+    // WEB / CHROME FIX
+    //
+    // Some browser speech engines can produce results like:
+    //
+    // hello
+    // hellohello
+    // hellohellohello how
+    // hellohellohello howhello how are
+    //
+    // We compare the current callback with the previous callback.
+    // If Chrome has appended a new hypothesis, we take the newly
+    // appended section instead of displaying the complete broken
+    // accumulated text.
+    // ==========================================================
+
+    if (raw.startsWith(_lastSpeechSnapshot)) {
+      final addedPart = raw
+          .substring(
+            _lastSpeechSnapshot.length,
+          )
+          .trim();
+
+      if (addedPart.isNotEmpty) {
+        latest = addedPart;
+      }
+    }
+
+    latest = _cleanSpeechResult(latest);
+
+    // If browser gives a healthy progressive result such as:
+    //
+    // hello
+    // hello how
+    // hello how are
+    //
+    // use the longest normal phrase.
+    if (!_looksLikeBrokenSpeech(raw)) {
+      latest = raw;
+    }
+
+    _lastSpeechSnapshot = raw;
+
+    if (latest.isNotEmpty) {
+      _currentSpeechText = latest;
+    }
+
+    return _currentSpeechText;
+  }
+
+  // ============================================================
+  // DETECT BROKEN CONCATENATED SPEECH
+  // ============================================================
+
+  bool _looksLikeBrokenSpeech(String text) {
+    final normalized = text.toLowerCase().trim();
+
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    // Common repeated-prefix patterns produced by browser speech.
+    final words = normalized.split(RegExp(r'\s+'));
+
+    if (words.isEmpty) {
+      return false;
+    }
+
+    // Catch strings such as:
+    // hellohello
+    // yesyesyes
+    // bookingbooking
+    final firstWord = words.first;
+
+    if (firstWord.length >= 4) {
+      final doubled = '$firstWord$firstWord';
+
+      if (normalized.startsWith(doubled)) {
+        return true;
+      }
+    }
+
+    // Catch immediate repeated chunks.
+    for (int length = 2;
+        length <= math.min(25, normalized.length ~/ 2);
+        length++) {
+      final first = normalized.substring(0, length);
+      final second = normalized.substring(length, length * 2);
+
+      if (first == second && RegExp(r'[a-z]').hasMatch(first)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   // ============================================================
@@ -479,7 +573,9 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
 
     _voiceTextBeforeListening = _textController.text.trim();
 
-    _lastFinalSpeech = '';
+    // Reset all microphone-session state.
+    _lastSpeechSnapshot = '';
+    _currentSpeechText = '';
 
     if (!mounted) return;
 
@@ -496,48 +592,48 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       await _speech.listen(
         listenMode: stt.ListenMode.dictation,
 
-        // ======================================================
-        // IMPORTANT DUPLICATION FIX
-        // ======================================================
-        partialResults: false,
+        // We deliberately use partial results.
+        //
+        // Every new result REPLACES the previous recognition
+        // instead of being appended to the TextField.
+        partialResults: true,
 
         cancelOnError: true,
 
         onResult: (result) {
           if (!mounted) return;
 
-          // Only accept completed speech.
-          if (!result.finalResult) {
+          final rawSpeech = result.recognizedWords.trim();
+
+          if (rawSpeech.isEmpty) {
             return;
           }
 
-          final raw = result.recognizedWords.trim();
+          final speech = _extractLatestSpeechHypothesis(
+            rawSpeech,
+          );
 
-          if (raw.isEmpty) {
+          if (speech.isEmpty) {
             return;
           }
-
-          final cleaned = _cleanSpeechResult(raw);
-
-          if (cleaned.isEmpty) {
-            return;
-          }
-
-          // Prevent duplicate final callback.
-          if (_lastFinalSpeech.trim().toLowerCase() ==
-              cleaned.trim().toLowerCase()) {
-            return;
-          }
-
-          _lastFinalSpeech = cleaned;
 
           final prefix = _voiceTextBeforeListening.trim();
 
-          final combined = prefix.isEmpty ? cleaned : '$prefix $cleaned';
+          final combined =
+              prefix.isEmpty ? speech : '$prefix $speech';
 
-          // IMPORTANT:
-          // Replace the speech text.
-          // Never append each speech callback.
+          // ====================================================
+          // IMPORTANT
+          //
+          // NEVER APPEND RECOGNITION CALLBACKS.
+          //
+          // WRONG:
+          // _textController.text += speech;
+          //
+          // CORRECT:
+          // Replace the complete TextEditingValue.
+          // ====================================================
+
           _textController.value = TextEditingValue(
             text: combined,
             selection: TextSelection.collapsed(
@@ -545,9 +641,11 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             ),
           );
 
-          setState(() {
-            _isListening = false;
-          });
+          if (result.finalResult) {
+            setState(() {
+              _isListening = false;
+            });
+          }
         },
       );
     } catch (error) {
@@ -597,7 +695,8 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     _textController.clear();
 
     _voiceTextBeforeListening = '';
-    _lastFinalSpeech = '';
+    _lastSpeechSnapshot = '';
+    _currentSpeechText = '';
 
     FocusScope.of(context).unfocus();
 
@@ -1017,9 +1116,8 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
                 _sendMessage();
               },
               decoration: InputDecoration(
-                hintText: _isListening
-                    ? 'Listening...'
-                    : 'Ask Faith AI anything...',
+                hintText:
+                    _isListening ? 'Listening...' : 'Ask Faith AI anything...',
                 hintStyle: const TextStyle(
                   fontSize: 12.5,
                 ),
@@ -1058,17 +1156,13 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             width: 46,
             height: 46,
             child: IconButton.filled(
-              tooltip: _isListening
-                  ? 'Stop listening'
-                  : 'Voice input',
+              tooltip:
+                  _isListening ? 'Stop listening' : 'Voice input',
               onPressed:
                   _controller.isLoading ? null : _toggleListening,
               style: IconButton.styleFrom(
-                backgroundColor: _isListening
-                    ? const Color(
-                        0xFFD84A4A,
-                      )
-                    : Colors.white,
+                backgroundColor:
+                    _isListening ? const Color(0xFFD84A4A) : Colors.white,
                 foregroundColor:
                     _isListening ? Colors.white : AppColors.deepGold,
                 side: const BorderSide(
@@ -1138,20 +1232,14 @@ class _MessageBubble extends StatelessWidget {
               ? const LinearGradient(
                   colors: [
                     AppColors.gold,
-                    Color(
-                      0xFFF0BC27,
-                    ),
+                    Color(0xFFF0BC27),
                   ],
                 )
               : null,
           color: isUser ? null : Colors.white,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(
-              18,
-            ),
-            topRight: const Radius.circular(
-              18,
-            ),
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
             bottomLeft: Radius.circular(
               isUser ? 18 : 5,
             ),
@@ -1418,7 +1506,6 @@ class _ParsedMessageContent extends StatelessWidget {
       }
 
       final altText = match.group(1) ?? '';
-
       final imageUrl = match.group(2) ?? '';
 
       if (imageUrl.trim().isNotEmpty) {
@@ -1621,7 +1708,6 @@ class _VoicePulse extends StatefulWidget {
 class _VoicePulseState extends State<_VoicePulse>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-
   late final Animation<double> _scale;
 
   @override
@@ -1651,6 +1737,7 @@ class _VoicePulseState extends State<_VoicePulse>
   @override
   void dispose() {
     _controller.dispose();
+
     super.dispose();
   }
 
@@ -1701,6 +1788,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
   @override
   void dispose() {
     _controller.dispose();
+
     super.dispose();
   }
 
@@ -1842,6 +1930,7 @@ class FaithCopilotController extends ChangeNotifier {
     }
 
     _isLoadingData = true;
+
     notifyListeners();
 
     final today = DateTime.now().toIso8601String().split('T').first;
@@ -1948,6 +2037,7 @@ class FaithCopilotController extends ChangeNotifier {
     }
 
     _isLoadingData = false;
+
     notifyListeners();
   }
 
@@ -1997,7 +2087,9 @@ class FaithCopilotController extends ChangeNotifier {
         cleanText,
       );
 
-      final cleanedReply = _cleanAIResponse(reply);
+      final cleanedReply = _cleanAIResponse(
+        reply,
+      );
 
       _processAIResponse(
         cleanText,
@@ -2017,6 +2109,7 @@ class FaithCopilotController extends ChangeNotifier {
       );
     } finally {
       _isLoading = false;
+
       notifyListeners();
     }
   }
@@ -2077,7 +2170,8 @@ class FaithCopilotController extends ChangeNotifier {
         midpoint,
       );
 
-      if (first.trim().toLowerCase() == second.trim().toLowerCase()) {
+      if (first.trim().toLowerCase() ==
+          second.trim().toLowerCase()) {
         cleaned = first.trim();
       }
     }
@@ -2112,9 +2206,8 @@ class FaithCopilotController extends ChangeNotifier {
     final imageAttachments = detectedServices
         .map(
           (service) {
-            final name = (service['name'] ?? 'Hairstyle')
-                .toString()
-                .trim();
+            final name =
+                (service['name'] ?? 'Hairstyle').toString().trim();
 
             final imageUrl =
                 (service['image_url'] ?? '').toString().trim();
@@ -2269,7 +2362,8 @@ class FaithCopilotController extends ChangeNotifier {
         if (first is Map) {
           final message = first['message'];
 
-          if (message is Map && message['content'] is String) {
+          if (message is Map &&
+              message['content'] is String) {
             return (message['content'] as String).trim();
           }
 
@@ -2631,7 +2725,9 @@ class CustomerPreferences {
         'Date/time preference: $datePreference',
     ];
 
-    return list.isEmpty ? 'No preferences set.' : list.join('\n');
+    return list.isEmpty
+        ? 'No preferences set.'
+        : list.join('\n');
   }
 }
 
@@ -2695,31 +2791,33 @@ class AIContextBuilder {
             )
             .join('\n');
 
-    final availabilityContext = controller.availabilitySlots.isEmpty
-        ? 'No dedicated availability-slot records were returned.'
-        : controller.availabilitySlots
-            .take(60)
-            .map(
-              (slot) {
-                return '- ${slot['slot_date']} | '
-                    '${slot['start_time']} to ${slot['end_time']}';
-              },
-            )
-            .join('\n');
+    final availabilityContext =
+        controller.availabilitySlots.isEmpty
+            ? 'No dedicated availability-slot records were returned.'
+            : controller.availabilitySlots
+                .take(60)
+                .map(
+                  (slot) {
+                    return '- ${slot['slot_date']} | '
+                        '${slot['start_time']} to ${slot['end_time']}';
+                  },
+                )
+                .join('\n');
 
-    final occupancyContext = controller.bookingSignals.isEmpty
-        ? 'No customer-safe future booking occupancy records were returned.'
-        : controller.bookingSignals
-            .take(60)
-            .map(
-              (booking) {
-                return '- service_id: ${booking['service_id']} | '
-                    'date: ${booking['booking_date']} | '
-                    'time: ${booking['start_time']} to ${booking['end_time']} | '
-                    'status: ${booking['status']}';
-              },
-            )
-            .join('\n');
+    final occupancyContext =
+        controller.bookingSignals.isEmpty
+            ? 'No customer-safe future booking occupancy records were returned.'
+            : controller.bookingSignals
+                .take(60)
+                .map(
+                  (booking) {
+                    return '- service_id: ${booking['service_id']} | '
+                        'date: ${booking['booking_date']} | '
+                        'time: ${booking['start_time']} to ${booking['end_time']} | '
+                        'status: ${booking['status']}';
+                  },
+                )
+                .join('\n');
 
     final allMessages = controller.messages;
 
@@ -2857,7 +2955,6 @@ Now respond only as Faith AI Copilot to the customer's latest message.
     }
 
     final hours = minutes ~/ 60;
-
     final remainder = minutes % 60;
 
     if (hours == 0) {
