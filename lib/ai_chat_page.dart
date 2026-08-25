@@ -1,19 +1,21 @@
-
-importimport 'dart:convert';
+import 'dart:convert';
 import 'dart:math' as math;
- 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'booking_page.dart';
 
-// ==========================================
-// 1. SHELL & LAUNCHER (UI)
-// ==========================================
+// ============================================================
+// FAITH AI COPILOT
+// Professional salon AI assistant
+// ============================================================
+
+// ============================================================
+// 1. SHELL & LAUNCHER
+// ============================================================
 
 class FaithAICopilotShell extends StatefulWidget {
   const FaithAICopilotShell({
@@ -33,7 +35,11 @@ class _FaithAICopilotShellState extends State<FaithAICopilotShell> {
   bool _isOpen = false;
 
   void _toggleChat() {
-    setState(() => _isOpen = !_isOpen);
+    if (!mounted) return;
+
+    setState(() {
+      _isOpen = !_isOpen;
+    });
   }
 
   @override
@@ -41,6 +47,7 @@ class _FaithAICopilotShellState extends State<FaithAICopilotShell> {
     return Stack(
       children: [
         widget.child,
+
         Positioned(
           right: 16,
           bottom: 16,
@@ -57,19 +64,23 @@ class _FaithAICopilotShellState extends State<FaithAICopilotShell> {
                       curve: Curves.easeOutBack,
                     ),
                     alignment: Alignment.bottomRight,
-                    child: FadeTransition(opacity: animation, child: child),
+                    child: FadeTransition(
+                      opacity: animation,
+                      child: child,
+                    ),
                   );
                 },
                 child: _isOpen
                     ? FaithAICopilotPanel(
-                        key: const ValueKey('panel'),
+                        key: const ValueKey('faith-ai-panel'),
                         navigatorKey: widget.navigatorKey,
                         onClose: _toggleChat,
                         onMinimize: _toggleChat,
                       )
                     : _CopilotLauncher(
-                        key: const ValueKey('launcher'),
-                        hasActiveChat: FaithCopilotController.instance.hasChatHistory,
+                        key: const ValueKey('faith-ai-launcher'),
+                        hasActiveChat:
+                            FaithCopilotController.instance.hasChatHistory,
                         onTap: _toggleChat,
                       ),
               ),
@@ -97,17 +108,28 @@ class _CopilotLauncher extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: Container(
-        constraints: const BoxConstraints(minHeight: 58),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        constraints: const BoxConstraints(
+          minHeight: 58,
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [AppColors.navy, AppColors.royalBlue],
+            colors: [
+              AppColors.navy,
+              AppColors.royalBlue,
+            ],
           ),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.gold, width: 1.4),
+          border: Border.all(
+            color: AppColors.gold,
+            width: 1.4,
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: .20),
+              color: Colors.black.withValues(alpha: 0.20),
               blurRadius: 22,
               offset: const Offset(0, 9),
             ),
@@ -143,7 +165,9 @@ class _CopilotLauncher extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  hasActiveChat ? 'Continue your chat' : 'Ask your salon copilot',
+                  hasActiveChat
+                      ? 'Continue your chat'
+                      : 'Ask your salon copilot',
                   style: const TextStyle(
                     color: Color(0xFFFFD761),
                     fontSize: 10.5,
@@ -159,9 +183,15 @@ class _CopilotLauncher extends StatelessWidget {
   }
 }
 
-// Backward-compatible full-page entry used by customer_home_page.dart.
+// ============================================================
+// BACKWARD-COMPATIBLE FULL PAGE
+// ============================================================
+
 class AIChatPage extends StatelessWidget {
-  const AIChatPage({super.key, this.navigatorKey});
+  const AIChatPage({
+    super.key,
+    this.navigatorKey,
+  });
 
   final GlobalKey<NavigatorState>? navigatorKey;
 
@@ -185,9 +215,9 @@ class AIChatPage extends StatelessWidget {
   }
 }
 
-// ==========================================
-// 2. PANEL (UI)
-// ==========================================
+// ============================================================
+// 2. FAITH AI PANEL
+// ============================================================
 
 class FaithAICopilotPanel extends StatefulWidget {
   const FaithAICopilotPanel({
@@ -202,24 +232,48 @@ class FaithAICopilotPanel extends StatefulWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
-  State<FaithAICopilotPanel> createState() => _FaithAICopilotPanelState();
+  State<FaithAICopilotPanel> createState() =>
+      _FaithAICopilotPanelState();
 }
 
 class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
-  final TextEditingController _textController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _textController =
+      TextEditingController();
+
+  final ScrollController _scrollController =
+      ScrollController();
+
   late final FaithCopilotController _controller;
+
   final stt.SpeechToText _speech = stt.SpeechToText();
+
   bool _speechReady = false;
   bool _isListening = false;
+
   String? _speechError;
+
+  // ------------------------------------------------------------
+  // VOICE DUPLICATION FIX
+  //
+  // Text already typed before microphone starts.
+  // Speech recognition only replaces the current speech portion.
+  // ------------------------------------------------------------
+
+  String _voiceTextBeforeListening = '';
+  String _lastRecognizedSpeech = '';
+
+  bool _speechInitializationInProgress = false;
 
   @override
   void initState() {
     super.initState();
+
     _controller = FaithCopilotController.instance;
-    _controller.addListener(_scrollToBottom);
+
+    _controller.addListener(_handleControllerUpdate);
+
     _initializeSpeech();
+
     if (_controller.services.isEmpty) {
       _controller.loadSalonData();
     }
@@ -227,35 +281,61 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
 
   @override
   void dispose() {
-    _controller.removeListener(_scrollToBottom);
+    _controller.removeListener(_handleControllerUpdate);
+
     _speech.stop();
+
     _textController.dispose();
     _scrollController.dispose();
+
     super.dispose();
+  }
+
+  void _handleControllerUpdate() {
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       if (!_scrollController.hasClients) return;
+
+      final position = _scrollController.position;
+
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 300,
-        duration: const Duration(milliseconds: 300),
+        position.maxScrollExtent,
+        duration: const Duration(milliseconds: 280),
         curve: Curves.easeOut,
       );
     });
   }
 
+  // ============================================================
+  // SPEECH INITIALIZATION
+  // ============================================================
+
   Future<void> _initializeSpeech() async {
+    if (_speechInitializationInProgress) {
+      return;
+    }
+
+    _speechInitializationInProgress = true;
+
     try {
       final available = await _speech.initialize(
         onStatus: (status) {
           if (!mounted) return;
-          if (status == 'done' || status == 'notListening') {
-            setState(() => _isListening = false);
+
+          if (status == 'done' ||
+              status == 'notListening') {
+            setState(() {
+              _isListening = false;
+            });
           }
         },
         onError: (error) {
           if (!mounted) return;
+
           setState(() {
             _isListening = false;
             _speechError = error.errorMsg;
@@ -264,123 +344,382 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       );
 
       if (!mounted) return;
+
       setState(() {
         _speechReady = available;
+
         _speechError = available
             ? null
             : 'Voice input is not available on this device or browser.';
       });
     } catch (_) {
       if (!mounted) return;
+
       setState(() {
         _speechReady = false;
-        _speechError = 'Voice input could not be initialized.';
+        _speechError =
+            'Voice input could not be initialized.';
       });
+    } finally {
+      _speechInitializationInProgress = false;
     }
   }
 
-  Future<void> _toggleListening() async {
-    if (_controller.isLoading) return;
+  // ============================================================
+  // SPEECH DUPLICATION CLEANUP
+  // ============================================================
 
-    if (_isListening) {
-      await _speech.stop();
-      if (!mounted) return;
-      setState(() => _isListening = false);
+  String _cleanSpeechResult(String input) {
+    var text = input.trim();
+
+    if (text.isEmpty) {
+      return '';
+    }
+
+    // Normalize unnecessary repeated spaces.
+    text = text.replaceAll(
+      RegExp(r'\s+'),
+      ' ',
+    );
+
+    // --------------------------------------------------------
+    // Fix exact duplicated phrase:
+    //
+    // hello hello -> hello
+    // book hairstyle book hairstyle -> book hairstyle
+    // --------------------------------------------------------
+
+    final words = text.split(' ');
+
+    if (words.length >= 2 &&
+        words.length.isEven) {
+      final midpoint = words.length ~/ 2;
+
+      final first =
+          words.sublist(0, midpoint).join(' ');
+
+      final second =
+          words.sublist(midpoint).join(' ');
+
+      if (first.toLowerCase() ==
+          second.toLowerCase()) {
+        text = first;
+      }
+    }
+
+    // --------------------------------------------------------
+    // Fix browser results such as:
+    //
+    // hellohello
+    // bookbook
+    // I'mI'm
+    //
+    // Only collapse reasonably sized exact duplicated halves.
+    // --------------------------------------------------------
+
+    if (text.length >= 4 &&
+        text.length.isEven) {
+      final midpoint = text.length ~/ 2;
+
+      final first =
+          text.substring(0, midpoint);
+
+      final second =
+          text.substring(midpoint);
+
+      if (first.toLowerCase() ==
+          second.toLowerCase()) {
+        text = first;
+      }
+    }
+
+    // --------------------------------------------------------
+    // Fix immediately repeated individual words:
+    //
+    // book book hairstyle -> book hairstyle
+    //
+    // Does NOT blindly remove all duplicates in the sentence.
+    // --------------------------------------------------------
+
+    final cleanedWords = <String>[];
+
+    for (final word in text.split(' ')) {
+      if (word.trim().isEmpty) {
+        continue;
+      }
+
+      if (cleanedWords.isNotEmpty) {
+        final previous =
+            cleanedWords.last.toLowerCase();
+
+        final current =
+            word.toLowerCase();
+
+        if (previous == current) {
+          continue;
+        }
+      }
+
+      cleanedWords.add(word);
+    }
+
+    return cleanedWords.join(' ').trim();
+  }
+
+  // ============================================================
+  // START / STOP VOICE INPUT
+  // ============================================================
+
+  Future<void> _toggleListening() async {
+    if (_controller.isLoading) {
       return;
     }
 
+    // --------------------------------------------------------
+    // STOP LISTENING
+    // --------------------------------------------------------
+
+    if (_isListening) {
+      try {
+        await _speech.stop();
+      } catch (_) {}
+
+      if (!mounted) return;
+
+      setState(() {
+        _isListening = false;
+      });
+
+      return;
+    }
+
+    // --------------------------------------------------------
+    // INITIALIZE IF NECESSARY
+    // --------------------------------------------------------
+
     if (!_speechReady) {
       await _initializeSpeech();
+
       if (!_speechReady) {
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            behavior: SnackBarBehavior.floating,
             content: Text(
               _speechError ??
-                  'Microphone access is unavailable. Check browser/device permissions.',
+                  'Microphone access is unavailable. Please check your browser or phone microphone permission.',
             ),
           ),
         );
+
         return;
       }
     }
+
+    // --------------------------------------------------------
+    // REMEMBER WHAT USER ALREADY TYPED
+    // --------------------------------------------------------
+
+    _voiceTextBeforeListening =
+        _textController.text.trim();
+
+    _lastRecognizedSpeech = '';
+
+    if (!mounted) return;
 
     setState(() {
       _isListening = true;
       _speechError = null;
     });
 
-    await _speech.listen(
-      listenMode: stt.ListenMode.dictation,
-      partialResults: true,
-      cancelOnError: true,
-      onResult: (result) {
-        if (!mounted) return;
+    // --------------------------------------------------------
+    // BEGIN SPEECH RECOGNITION
+    // --------------------------------------------------------
 
-        final rawWords = result.recognizedWords.trim();
-        var words = rawWords;
+    try {
+      await _speech.listen(
+        listenMode: stt.ListenMode.dictation,
+        partialResults: true,
+        cancelOnError: true,
 
-        // Some mobile browsers can return the same recognition result twice
-        // joined together, for example: "hellohello" or
-        // "good morninggood morning". Collapse an exact repeated half.
-        if (rawWords.length >= 2 && rawWords.length.isEven) {
-          final half = rawWords.length ~/ 2;
-          final firstHalf = rawWords.substring(0, half);
-          final secondHalf = rawWords.substring(half);
+        onResult: (result) {
+          if (!mounted) return;
 
-          if (firstHalf.toLowerCase() == secondHalf.toLowerCase()) {
-            words = firstHalf;
+          final raw =
+              result.recognizedWords.trim();
+
+          if (raw.isEmpty) {
+            return;
           }
-        }
 
-        if (words.isNotEmpty) {
-          _textController.value = TextEditingValue(
-            text: words,
-            selection: TextSelection.collapsed(offset: words.length),
+          final cleaned =
+              _cleanSpeechResult(raw);
+
+          if (cleaned.isEmpty) {
+            return;
+          }
+
+          // IMPORTANT:
+          //
+          // speech_to_text partialResults usually sends:
+          //
+          // "I'm"
+          // "I'm looking"
+          // "I'm looking for"
+          //
+          // These are replacement transcripts, NOT new pieces.
+          //
+          // Therefore we NEVER append them repeatedly.
+          _lastRecognizedSpeech = cleaned;
+
+          final prefix =
+              _voiceTextBeforeListening.trim();
+
+          final combined = prefix.isEmpty
+              ? cleaned
+              : '$prefix $cleaned';
+
+          _textController.value =
+              TextEditingValue(
+            text: combined,
+            selection: TextSelection.collapsed(
+              offset: combined.length,
+            ),
           );
-        }
 
-        if (result.finalResult) {
-          setState(() => _isListening = false);
-        }
-      },
-    );
+          if (result.finalResult) {
+            setState(() {
+              _isListening = false;
+            });
+          }
+        },
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _isListening = false;
+        _speechError =
+            'Voice recognition could not start.';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Voice recognition could not start. Please check microphone permission.',
+          ),
+        ),
+      );
+    }
   }
 
+  // ============================================================
+  // SEND MESSAGE
+  // ============================================================
+
   void _sendMessage([String? preset]) {
-    final text = (preset ?? _textController.text).trim();
-    if (text.isEmpty || _controller.isLoading) return;
+    final text =
+        (preset ?? _textController.text).trim();
+
+    if (text.isEmpty ||
+        _controller.isLoading) {
+      return;
+    }
+
+    if (_isListening) {
+      _speech.stop();
+
+      if (mounted) {
+        setState(() {
+          _isListening = false;
+        });
+      }
+    }
 
     _textController.clear();
+
+    _voiceTextBeforeListening = '';
+    _lastRecognizedSpeech = '';
+
+    FocusScope.of(context).unfocus();
+
     _controller.sendMessage(text);
   }
 
+  // ============================================================
+  // OPEN BOOKING
+  // ============================================================
+
   Future<void> _openBooking() async {
-    final service = _controller.getSuggestedService();
+    final service =
+        _controller.getSuggestedService();
+
     if (service == null) {
       _controller.addSystemMessage(
-        'Before I open booking, tell me which hairstyle you want. I can also recommend one based on your budget.',
+        'Tell me which hairstyle you would like to book first. I can also help you choose one based on your style, length, size, and budget.',
       );
+
       return;
     }
 
     final route = MaterialPageRoute(
-      builder: (_) => BookingPage(service: service),
+      builder: (_) =>
+          BookingPage(service: service),
     );
 
-    final globalNav = widget.navigatorKey?.currentState;
-    if (globalNav != null) {
-      await globalNav.push(route);
-    } else if (mounted) {
-      await Navigator.maybeOf(context)?.push(route);
+    final globalNavigator =
+        widget.navigatorKey?.currentState;
+
+    if (globalNavigator != null) {
+      await globalNavigator.push(route);
+      return;
+    }
+
+    if (!mounted) return;
+
+    final navigator =
+        Navigator.maybeOf(context);
+
+    if (navigator != null) {
+      await navigator.push(route);
     }
   }
 
+  // ============================================================
+  // MAIN UI
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
-    final width = math.min(430.0, math.max(280.0, screen.width - 24));
-    final height = math.min(650.0, math.max(320.0, screen.height - 32));
+    final media =
+        MediaQuery.of(context);
+
+    final screen =
+        media.size;
+
+    final width = math.min(
+      430.0,
+      math.max(
+        280.0,
+        screen.width - 24,
+      ),
+    );
+
+    final availableHeight =
+        screen.height -
+            media.padding.top -
+            media.padding.bottom -
+            24;
+
+    final height = math.min(
+      650.0,
+      math.max(
+        320.0,
+        availableHeight,
+      ),
+    );
 
     return ListenableBuilder(
       listenable: _controller,
@@ -391,11 +730,16 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: AppColors.pageBackground,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.gold, width: 1.3),
+            borderRadius:
+                BorderRadius.circular(24),
+            border: Border.all(
+              color: AppColors.gold,
+              width: 1.3,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: .24),
+                color: Colors.black
+                    .withValues(alpha: 0.24),
                 blurRadius: 32,
                 offset: const Offset(0, 14),
               ),
@@ -404,24 +748,58 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
           child: Column(
             children: [
               _buildHeader(),
+
               _buildQuickActions(),
-              const Divider(height: 1, color: AppColors.borderLight),
+
+              const Divider(
+                height: 1,
+                color: AppColors.borderLight,
+              ),
+
               Expanded(
                 child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                  itemCount: _controller.messages.length + (_controller.isLoading ? 1 : 0),
-                  itemBuilder: (_, index) {
-                    if (_controller.isLoading && index == _controller.messages.length) {
+                  controller:
+                      _scrollController,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior
+                          .onDrag,
+                  padding:
+                      const EdgeInsets.fromLTRB(
+                    12,
+                    10,
+                    12,
+                    12,
+                  ),
+                  itemCount:
+                      _controller.messages.length +
+                          (_controller.isLoading
+                              ? 1
+                              : 0),
+                  itemBuilder:
+                      (context, index) {
+                    if (_controller.isLoading &&
+                        index ==
+                            _controller
+                                .messages.length) {
                       return const _TypingIndicator();
                     }
-                    return _MessageBubble(message: _controller.messages[index]);
+
+                    return _MessageBubble(
+                      message: _controller
+                          .messages[index],
+                    );
                   },
                 ),
               ),
-              if (_controller.showBookingButton && !_controller.isLoading)
+
+              if (_controller
+                      .showBookingButton &&
+                  !_controller.isLoading)
                 _buildBookingButton(),
-              if (_isListening) _buildListeningBanner(),
+
+              if (_isListening)
+                _buildListeningBanner(),
+
               _buildInputArea(),
             ],
           ),
@@ -430,12 +808,27 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     );
   }
 
+  // ============================================================
+  // HEADER
+  // ============================================================
+
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-      decoration: const BoxDecoration(
+      padding:
+          const EdgeInsets.fromLTRB(
+        14,
+        12,
+        8,
+        12,
+      ),
+      decoration:
+          const BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.navy, AppColors.deepBlue, AppColors.royalBlue],
+          colors: [
+            AppColors.navy,
+            AppColors.deepBlue,
+            AppColors.royalBlue,
+          ],
         ),
       ),
       child: Row(
@@ -443,113 +836,206 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
           Container(
             width: 40,
             height: 40,
-            decoration: const BoxDecoration(color: AppColors.gold, shape: BoxShape.circle),
-            child: const Icon(Icons.auto_awesome_rounded, color: AppColors.navy, size: 21),
+            decoration:
+                const BoxDecoration(
+              color: AppColors.gold,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              color: AppColors.navy,
+              size: 21,
+            ),
           ),
+
           const SizedBox(width: 10),
+
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 const Text(
                   'FAITH AI COPILOT',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: .7,
+                    fontWeight:
+                        FontWeight.w900,
+                    letterSpacing: 0.7,
                   ),
                 ),
+
                 Text(
                   _controller.isLoadingData
                       ? 'Loading live salon info...'
                       : 'Styles • prices • colors • availability',
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFFFFD761),
+                  overflow:
+                      TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(
+                    color:
+                        Color(0xFFFFD761),
                     fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight:
+                        FontWeight.w700,
                   ),
                 ),
               ],
             ),
           ),
+
           IconButton(
-            tooltip: 'Refresh',
-            onPressed: _controller.isLoadingData ? null : _controller.loadSalonData,
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20),
+            tooltip: 'Refresh salon data',
+            onPressed:
+                _controller.isLoadingData
+                    ? null
+                    : () {
+                        _controller
+                            .loadSalonData();
+                      },
+            icon: const Icon(
+              Icons.refresh_rounded,
+              color: Colors.white70,
+              size: 20,
+            ),
           ),
+
           if (widget.onMinimize != null)
             IconButton(
               tooltip: 'Minimize',
-              onPressed: widget.onMinimize,
-              icon: const Icon(Icons.remove_rounded, color: Colors.white, size: 23),
+              onPressed:
+                  widget.onMinimize,
+              icon: const Icon(
+                Icons.remove_rounded,
+                color: Colors.white,
+                size: 23,
+              ),
             ),
+
           if (widget.onClose != null)
             IconButton(
               tooltip: 'Close',
               onPressed: widget.onClose,
-              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 21),
+              icon: const Icon(
+                Icons.close_rounded,
+                color: Colors.white,
+                size: 21,
+              ),
             ),
         ],
       ),
     );
   }
 
+  // ============================================================
+  // QUICK ACTIONS
+  // ============================================================
+
   Widget _buildQuickActions() {
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      height: 52,
+      color: Colors.white,
+      padding:
+          const EdgeInsets.symmetric(
+        vertical: 6,
+      ),
       child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        scrollDirection:
+            Axis.horizontal,
+        padding:
+            const EdgeInsets.symmetric(
+          horizontal: 10,
+        ),
         children: [
           _QuickChip(
             label: 'Choose for me',
-            icon: Icons.auto_awesome_rounded,
-            onTap: () => _sendMessage('Help me choose the best hairstyle. Ask only one useful question if you still need information.'),
-            isLoading: _controller.isLoading,
+            icon:
+                Icons.auto_awesome_rounded,
+            onTap: () => _sendMessage(
+              'Help me choose the best hairstyle for me. Ask only one useful question if you still need information.',
+            ),
+            isLoading:
+                _controller.isLoading,
           ),
+
           const SizedBox(width: 7),
+
           _QuickChip(
             label: 'Under my budget',
-            icon: Icons.savings_outlined,
-            onTap: () => _sendMessage('Help me find hairstyles that fit my budget. Ask my budget if I have not told you yet.'),
-            isLoading: _controller.isLoading,
+            icon:
+                Icons.savings_outlined,
+            onTap: () => _sendMessage(
+              'Help me find hairstyles that fit my budget. Ask for my budget if I have not told you yet.',
+            ),
+            isLoading:
+                _controller.isLoading,
           ),
+
           const SizedBox(width: 7),
+
           _QuickChip(
             label: 'Open times',
-            icon: Icons.schedule_rounded,
-            onTap: () => _sendMessage('Show me the next available appointment times.'),
-            isLoading: _controller.isLoading,
+            icon:
+                Icons.schedule_rounded,
+            onTap: () => _sendMessage(
+              'Show me the next available appointment times using the live salon availability.',
+            ),
+            isLoading:
+                _controller.isLoading,
           ),
         ],
       ),
     );
   }
 
+  // ============================================================
+  // BOOKING BUTTON
+  // ============================================================
+
   Widget _buildBookingButton() {
-    final serviceName = _controller.lastSuggestedServiceName;
+    final serviceName =
+        _controller
+            .lastSuggestedServiceName;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      padding:
+          const EdgeInsets.fromLTRB(
+        12,
+        0,
+        12,
+        8,
+      ),
       child: SizedBox(
         width: double.infinity,
         child: FilledButton.icon(
           onPressed: _openBooking,
-          icon: const Icon(Icons.calendar_month_rounded),
-          label: Text(
-            serviceName == null ? 'OPEN BOOKING' : 'BOOK ${serviceName.toUpperCase()}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          icon: const Icon(
+            Icons.calendar_month_rounded,
           ),
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.navy,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+          label: Text(
+            serviceName == null
+                ? 'OPEN BOOKING'
+                : 'BOOK ${serviceName.toUpperCase()}',
+            maxLines: 1,
+            overflow:
+                TextOverflow.ellipsis,
+          ),
+          style:
+              FilledButton.styleFrom(
+            backgroundColor:
+                AppColors.navy,
+            foregroundColor:
+                Colors.white,
+            padding:
+                const EdgeInsets.symmetric(
+              vertical: 13,
+            ),
+            shape:
+                RoundedRectangleBorder(
+              borderRadius:
+                  BorderRadius.circular(14),
             ),
           ),
         ),
@@ -557,21 +1043,46 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     );
   }
 
+  // ============================================================
+  // LISTENING BANNER
+  // ============================================================
+
   Widget _buildListeningBanner() {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
+      duration:
+          const Duration(
+        milliseconds: 220,
+      ),
       child: Container(
-        key: const ValueKey('voice-listening'),
+        key: const ValueKey(
+          'voice-listening',
+        ),
         width: double.infinity,
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        margin:
+            const EdgeInsets.fromLTRB(
+          12,
+          0,
+          12,
+          8,
+        ),
+        padding:
+            const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 9,
+        ),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF7DB),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.borderGold),
+          color:
+              const Color(0xFFFFF7DB),
+          borderRadius:
+              BorderRadius.circular(12),
+          border: Border.all(
+            color:
+                AppColors.borderGold,
+          ),
         ),
         child: const Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+              MainAxisSize.min,
           children: [
             _VoicePulse(),
             SizedBox(width: 9),
@@ -579,9 +1090,11 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
               child: Text(
                 'Listening... speak naturally. Tap the microphone again to stop.',
                 style: TextStyle(
-                  color: AppColors.navy,
+                  color:
+                      AppColors.navy,
                   fontSize: 12,
-                  fontWeight: FontWeight.w800,
+                  fontWeight:
+                      FontWeight.w800,
                 ),
               ),
             ),
@@ -591,74 +1104,172 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     );
   }
 
+  // ============================================================
+  // INPUT AREA
+  // ============================================================
+
   Widget _buildInputArea() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-      decoration: const BoxDecoration(
+      padding:
+          const EdgeInsets.fromLTRB(
+        10,
+        8,
+        10,
+        10,
+      ),
+      decoration:
+          const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.borderLight)),
+        border: Border(
+          top: BorderSide(
+            color:
+                AppColors.borderLight,
+          ),
+        ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment:
+            CrossAxisAlignment.end,
         children: [
           Expanded(
             child: TextField(
-              controller: _textController,
-              enabled: !_controller.isLoading,
+              controller:
+                  _textController,
+              enabled:
+                  !_controller.isLoading,
               minLines: 1,
               maxLines: 4,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _sendMessage(),
-              decoration: InputDecoration(
-                hintText: 'Ask Faith AI anything...',
-                hintStyle: const TextStyle(fontSize: 12.5),
-                filled: true,
-                fillColor: AppColors.pageBackground,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  borderSide: BorderSide.none,
+              keyboardType:
+                  TextInputType.multiline,
+              textCapitalization:
+                  TextCapitalization.sentences,
+              textInputAction:
+                  TextInputAction.send,
+              onSubmitted: (_) {
+                _sendMessage();
+              },
+              decoration:
+                  InputDecoration(
+                hintText:
+                    _isListening
+                        ? 'Listening...'
+                        : 'Ask Faith AI anything...',
+                hintStyle:
+                    const TextStyle(
+                  fontSize: 12.5,
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  borderSide: const BorderSide(color: AppColors.gold, width: 1.5),
+                filled: true,
+                fillColor:
+                    AppColors.pageBackground,
+                contentPadding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border:
+                    OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(
+                    18,
+                  ),
+                  borderSide:
+                      BorderSide.none,
+                ),
+                enabledBorder:
+                    OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(
+                    18,
+                  ),
+                  borderSide:
+                      BorderSide.none,
+                ),
+                focusedBorder:
+                    OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(
+                    18,
+                  ),
+                  borderSide:
+                      const BorderSide(
+                    color:
+                        AppColors.gold,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
           ),
+
           const SizedBox(width: 8),
+
           SizedBox(
             width: 46,
             height: 46,
-            child: IconButton.filled(
-              tooltip: _isListening ? 'Stop listening' : 'Voice input',
-              onPressed: _controller.isLoading ? null : _toggleListening,
-              style: IconButton.styleFrom(
+            child:
+                IconButton.filled(
+              tooltip: _isListening
+                  ? 'Stop listening'
+                  : 'Voice input',
+              onPressed:
+                  _controller.isLoading
+                      ? null
+                      : _toggleListening,
+              style:
+                  IconButton.styleFrom(
                 backgroundColor:
-                    _isListening ? const Color(0xFFD84A4A) : Colors.white,
+                    _isListening
+                        ? const Color(
+                            0xFFD84A4A,
+                          )
+                        : Colors.white,
                 foregroundColor:
-                    _isListening ? Colors.white : AppColors.deepGold,
-                side: const BorderSide(color: AppColors.borderGold),
+                    _isListening
+                        ? Colors.white
+                        : AppColors
+                            .deepGold,
+                side:
+                    const BorderSide(
+                  color:
+                      AppColors.borderGold,
+                ),
               ),
               icon: Icon(
-                _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                _isListening
+                    ? Icons.mic_rounded
+                    : Icons
+                        .mic_none_rounded,
                 size: 22,
               ),
             ),
           ),
+
           const SizedBox(width: 8),
+
           SizedBox(
             width: 46,
             height: 46,
             child: FilledButton(
-              onPressed: _controller.isLoading ? null : _sendMessage,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.gold,
-                foregroundColor: AppColors.navy,
-                padding: EdgeInsets.zero,
-                shape: const CircleBorder(),
+              onPressed:
+                  _controller.isLoading
+                      ? null
+                      : () =>
+                          _sendMessage(),
+              style:
+                  FilledButton.styleFrom(
+                backgroundColor:
+                    AppColors.gold,
+                foregroundColor:
+                    AppColors.navy,
+                padding:
+                    EdgeInsets.zero,
+                shape:
+                    const CircleBorder(),
               ),
-              child: const Icon(Icons.send_rounded, size: 20),
+              child: const Icon(
+                Icons.send_rounded,
+                size: 20,
+              ),
             ),
           ),
         ],
@@ -667,59 +1278,140 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   }
 }
 
-// ==========================================
-// 3. UI COMPONENTS (UPDATED WITH IMAGE SUPPORT)
-// ==========================================
+// ============================================================
+// 3. MESSAGE UI
+// ============================================================
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message});
+  const _MessageBubble({
+    required this.message,
+  });
+
   final ChatMessage message;
 
   @override
   Widget build(BuildContext context) {
-    final isUser = message.isUser;
+    final isUser =
+        message.isUser;
+
     return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: isUser
+          ? Alignment.centerRight
+          : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        padding: const EdgeInsets.all(13),
-        constraints: const BoxConstraints(maxWidth: 360),
+        margin:
+            const EdgeInsets.symmetric(
+          vertical: 5,
+        ),
+        padding:
+            const EdgeInsets.all(13),
+        constraints:
+            const BoxConstraints(
+          maxWidth: 360,
+        ),
         decoration: BoxDecoration(
-          gradient: isUser ? const LinearGradient(colors: [AppColors.gold, Color(0xFFF0BC27)]) : null,
-          color: isUser ? null : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(isUser ? 18 : 5),
-            bottomRight: Radius.circular(isUser ? 5 : 18),
+          gradient: isUser
+              ? const LinearGradient(
+                  colors: [
+                    AppColors.gold,
+                    Color(
+                      0xFFF0BC27,
+                    ),
+                  ],
+                )
+              : null,
+          color:
+              isUser ? null : Colors.white,
+          borderRadius:
+              BorderRadius.only(
+            topLeft:
+                const Radius.circular(
+              18,
+            ),
+            topRight:
+                const Radius.circular(
+              18,
+            ),
+            bottomLeft:
+                Radius.circular(
+              isUser ? 18 : 5,
+            ),
+            bottomRight:
+                Radius.circular(
+              isUser ? 5 : 18,
+            ),
           ),
-          border: isUser ? null : Border.all(color: AppColors.borderLight),
+          border: isUser
+              ? null
+              : Border.all(
+                  color: AppColors
+                      .borderLight,
+                ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black
+                  .withValues(
+                    alpha: 0.035,
+                  ),
+              blurRadius: 8,
+              offset:
+                  const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
-          crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: isUser
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize:
+                  MainAxisSize.min,
               children: [
                 if (!isUser) ...[
-                  const Icon(Icons.auto_awesome_rounded, size: 14, color: AppColors.deepGold),
-                  const SizedBox(width: 5),
+                  const Icon(
+                    Icons
+                        .auto_awesome_rounded,
+                    size: 14,
+                    color: AppColors
+                        .deepGold,
+                  ),
+                  const SizedBox(
+                    width: 5,
+                  ),
                 ],
                 Text(
-                  isUser ? 'You' : 'Faith AI',
-                  style: const TextStyle(
-                    color: AppColors.navy,
+                  isUser
+                      ? 'You'
+                      : 'Faith AI',
+                  style:
+                      const TextStyle(
+                    color:
+                        AppColors.navy,
                     fontSize: 11,
-                    fontWeight: FontWeight.w900,
+                    fontWeight:
+                        FontWeight.w900,
                   ),
                 ),
               ],
             ),
+
             const SizedBox(height: 5),
-            _ParsedMessageContent(text: message.text),
-            if (!isUser && message.serviceImages.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _ServiceRecommendationImages(images: message.serviceImages),
+
+            _ParsedMessageContent(
+              text: message.text,
+            ),
+
+            if (!isUser &&
+                message.serviceImages
+                    .isNotEmpty) ...[
+              const SizedBox(
+                height: 12,
+              ),
+              _ServiceRecommendationImages(
+                images: message
+                    .serviceImages,
+              ),
             ],
           ],
         ),
@@ -728,28 +1420,47 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+// ============================================================
+// SERVICE RECOMMENDATION IMAGES
+// ============================================================
 
-class _ServiceRecommendationImages extends StatelessWidget {
-  const _ServiceRecommendationImages({required this.images});
+class _ServiceRecommendationImages
+    extends StatelessWidget {
+  const _ServiceRecommendationImages({
+    required this.images,
+  });
 
-  final List<ServiceImageAttachment> images;
+  final List<ServiceImageAttachment>
+      images;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize:
+          MainAxisSize.min,
       children: [
-        for (int i = 0; i < images.length; i++) ...[
-          _ServiceImageCard(image: images[i]),
-          if (i != images.length - 1) const SizedBox(height: 10),
+        for (int i = 0;
+            i < images.length;
+            i++) ...[
+          _ServiceImageCard(
+            image: images[i],
+          ),
+          if (i !=
+              images.length - 1)
+            const SizedBox(
+              height: 10,
+            ),
         ],
       ],
     );
   }
 }
 
-class _ServiceImageCard extends StatelessWidget {
-  const _ServiceImageCard({required this.image});
+class _ServiceImageCard
+    extends StatelessWidget {
+  const _ServiceImageCard({
+    required this.image,
+  });
 
   final ServiceImageAttachment image;
 
@@ -757,72 +1468,124 @@ class _ServiceImageCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      clipBehavior: Clip.antiAlias,
+      clipBehavior:
+          Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppColors.pageBackground,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.borderGold),
+        color:
+            AppColors.pageBackground,
+        borderRadius:
+            BorderRadius.circular(14),
+        border: Border.all(
+          color:
+              AppColors.borderGold,
+        ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           AspectRatio(
             aspectRatio: 4 / 3,
             child: Image.network(
               image.url,
-              width: double.infinity,
+              width:
+                  double.infinity,
               fit: BoxFit.cover,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
+              loadingBuilder:
+                  (
+                context,
+                child,
+                progress,
+              ) {
+                if (progress == null) {
+                  return child;
+                }
+
                 return const Center(
-                  child: CircularProgressIndicator(
+                  child:
+                      CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppColors.gold,
+                    color:
+                        AppColors.gold,
                   ),
                 );
               },
-              errorBuilder: (_, __, ___) => Container(
-                color: AppColors.pageBackground,
-                alignment: Alignment.center,
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.broken_image_rounded,
-                      color: AppColors.muted,
-                      size: 34,
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'Style image unavailable',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
+              errorBuilder:
+                  (
+                context,
+                error,
+                stackTrace,
+              ) {
+                return Container(
+                  color: AppColors
+                      .pageBackground,
+                  alignment:
+                      Alignment.center,
+                  child:
+                      const Column(
+                    mainAxisAlignment:
+                        MainAxisAlignment
+                            .center,
+                    children: [
+                      Icon(
+                        Icons
+                            .broken_image_rounded,
+                        color:
+                            AppColors.muted,
+                        size: 34,
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                      SizedBox(
+                        height: 6,
+                      ),
+                      Text(
+                        'Style image unavailable',
+                        style:
+                            TextStyle(
+                          color:
+                              AppColors.muted,
+                          fontSize:
+                              12,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
+
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 9, 12, 10),
+            padding:
+                const EdgeInsets.fromLTRB(
+              12,
+              9,
+              12,
+              10,
+            ),
             child: Row(
               children: [
                 const Icon(
-                  Icons.photo_camera_rounded,
+                  Icons
+                      .photo_camera_rounded,
                   size: 16,
-                  color: AppColors.deepGold,
+                  color:
+                      AppColors.deepGold,
                 ),
-                const SizedBox(width: 7),
+                const SizedBox(
+                  width: 7,
+                ),
                 Expanded(
                   child: Text(
                     image.serviceName,
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.navy,
-                      fontWeight: FontWeight.w900,
+                    overflow:
+                        TextOverflow.ellipsis,
+                    style:
+                        const TextStyle(
+                      color:
+                          AppColors.navy,
+                      fontWeight:
+                          FontWeight.w900,
                       fontSize: 13,
                     ),
                   ),
@@ -836,134 +1599,253 @@ class _ServiceImageCard extends StatelessWidget {
   }
 }
 
-/// Parses the AI message for Markdown Images ![alt](url) and renders them inline
-class _ParsedMessageContent extends StatelessWidget {
+// ============================================================
+// MARKDOWN MESSAGE PARSER
+// ============================================================
+
+class _ParsedMessageContent
+    extends StatelessWidget {
+  const _ParsedMessageContent({
+    required this.text,
+  });
+
   final String text;
-  const _ParsedMessageContent({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    // Regex to match standard Markdown images: ![alt](url)
-    final imageRegex = RegExp(r'!\[(.*?)\]\((.*?)\)');
-    final matches = imageRegex.allMatches(text);
+    final imageRegex =
+        RegExp(
+      r'!\[(.*?)\]\((.*?)\)',
+    );
+
+    final matches =
+        imageRegex.allMatches(text);
 
     if (matches.isEmpty) {
-      return _MarkdownText(text: text);
+      return _MarkdownText(
+        text: text,
+      );
     }
 
-    final List<Widget> children = [];
+    final children =
+        <Widget>[];
+
     int lastMatchEnd = 0;
 
     for (final match in matches) {
-      // 1. Add text before the image
-      if (match.start > lastMatchEnd) {
-        final textPart = text.substring(lastMatchEnd, match.start).trim();
+      if (match.start >
+          lastMatchEnd) {
+        final textPart = text
+            .substring(
+              lastMatchEnd,
+              match.start,
+            )
+            .trim();
+
         if (textPart.isNotEmpty) {
-          children.add(_MarkdownText(text: textPart));
-          children.add(const SizedBox(height: 10));
+          children.add(
+            _MarkdownText(
+              text: textPart,
+            ),
+          );
+
+          children.add(
+            const SizedBox(
+              height: 10,
+            ),
+          );
         }
       }
 
-      // 2. Extract image URL and Alt Text
-      final altText = match.group(1) ?? '';
-      final imageUrl = match.group(2) ?? '';
+      final altText =
+          match.group(1) ?? '';
 
-      // 3. Render the Image
-      children.add(
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 150,
-                  width: double.infinity,
-                  color: AppColors.pageBackground,
-                  alignment: Alignment.center,
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.broken_image_rounded, color: AppColors.muted, size: 32),
-                      SizedBox(height: 4),
-                      Text('Image not available', style: TextStyle(color: AppColors.muted, fontSize: 12)),
-                    ],
+      final imageUrl =
+          match.group(2) ?? '';
+
+      if (imageUrl.trim().isNotEmpty) {
+        children.add(
+          Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius:
+                    BorderRadius.circular(
+                  12,
+                ),
+                child: Image.network(
+                  imageUrl,
+                  width:
+                      double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder:
+                      (
+                    context,
+                    error,
+                    stackTrace,
+                  ) {
+                    return Container(
+                      height: 150,
+                      width:
+                          double.infinity,
+                      color: AppColors
+                          .pageBackground,
+                      alignment:
+                          Alignment.center,
+                      child:
+                          const Column(
+                        mainAxisAlignment:
+                            MainAxisAlignment
+                                .center,
+                        children: [
+                          Icon(
+                            Icons
+                                .broken_image_rounded,
+                            color:
+                                AppColors.muted,
+                            size: 32,
+                          ),
+                          SizedBox(
+                            height: 4,
+                          ),
+                          Text(
+                            'Image not available',
+                            style:
+                                TextStyle(
+                              color:
+                                  AppColors.muted,
+                              fontSize:
+                                  12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              if (altText
+                  .trim()
+                  .isNotEmpty) ...[
+                const SizedBox(
+                  height: 4,
+                ),
+                Text(
+                  altText,
+                  style:
+                      const TextStyle(
+                    color:
+                        AppColors.muted,
+                    fontSize: 11,
+                    fontStyle:
+                        FontStyle.italic,
                   ),
                 ),
-              ),
-            ),
-            if (altText.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                altText,
-                style: const TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 11,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ]
-          ],
-        ),
-      );
-      children.add(const SizedBox(height: 10));
+              ],
+            ],
+          ),
+        );
 
-      lastMatchEnd = match.end;
+        children.add(
+          const SizedBox(
+            height: 10,
+          ),
+        );
+      }
+
+      lastMatchEnd =
+          match.end;
     }
 
-    // 4. Add any remaining text after the last image
-    if (lastMatchEnd < text.length) {
-      final textPart = text.substring(lastMatchEnd).trim();
+    if (lastMatchEnd <
+        text.length) {
+      final textPart = text
+          .substring(
+            lastMatchEnd,
+          )
+          .trim();
+
       if (textPart.isNotEmpty) {
-        children.add(_MarkdownText(text: textPart));
+        children.add(
+          _MarkdownText(
+            text: textPart,
+          ),
+        );
       }
     }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+      mainAxisSize:
+          MainAxisSize.min,
       children: children,
     );
   }
 }
 
-/// Lightweight parser to support **bold** text naturally output by LLMs
-class _MarkdownText extends StatelessWidget {
+// ============================================================
+// LIGHTWEIGHT MARKDOWN TEXT
+// ============================================================
+
+class _MarkdownText
+    extends StatelessWidget {
+  const _MarkdownText({
+    required this.text,
+  });
+
   final String text;
-  const _MarkdownText({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    final spans = <TextSpan>[];
-    final split = text.split('**');
-    
-    for (int i = 0; i < split.length; i++) {
-      if (split[i].isEmpty) continue;
-      // Every odd index in a ** split is the bolded text
-      final isBold = i % 2 != 0;
-      spans.add(TextSpan(
-        text: split[i],
-        style: TextStyle(
-          fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-          color: AppColors.navy,
-          fontSize: 14,
-          height: 1.4,
+    final spans =
+        <TextSpan>[];
+
+    final split =
+        text.split('**');
+
+    for (int i = 0;
+        i < split.length;
+        i++) {
+      if (split[i].isEmpty) {
+        continue;
+      }
+
+      final isBold =
+          i.isOdd;
+
+      spans.add(
+        TextSpan(
+          text: split[i],
+          style: TextStyle(
+            fontWeight: isBold
+                ? FontWeight.bold
+                : FontWeight.normal,
+            color:
+                AppColors.navy,
+            fontSize: 14,
+            height: 1.4,
+          ),
         ),
-      ));
+      );
     }
 
-    return SelectableText.rich(TextSpan(children: spans));
+    return SelectableText.rich(
+      TextSpan(
+        children: spans,
+      ),
+    );
   }
 }
 
-class _QuickChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isLoading;
+// ============================================================
+// QUICK CHIP
+// ============================================================
 
+class _QuickChip
+    extends StatelessWidget {
   const _QuickChip({
     required this.label,
     required this.icon,
@@ -971,42 +1853,93 @@ class _QuickChip extends StatelessWidget {
     required this.isLoading,
   });
 
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isLoading;
+
   @override
   Widget build(BuildContext context) {
     return ActionChip(
-      avatar: Icon(icon, size: 17, color: AppColors.deepGold),
+      avatar: Icon(
+        icon,
+        size: 17,
+        color:
+            AppColors.deepGold,
+      ),
       label: Text(label),
-      onPressed: isLoading ? null : onTap,
-      backgroundColor: Colors.white,
-      side: const BorderSide(color: AppColors.borderGold),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      labelStyle: const TextStyle(color: AppColors.navy, fontSize: 12, fontWeight: FontWeight.w800),
+      onPressed:
+          isLoading ? null : onTap,
+      backgroundColor:
+          Colors.white,
+      side: const BorderSide(
+        color:
+            AppColors.borderGold,
+      ),
+      shape:
+          RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.circular(14),
+      ),
+      labelStyle:
+          const TextStyle(
+        color: AppColors.navy,
+        fontSize: 12,
+        fontWeight:
+            FontWeight.w800,
+      ),
     );
   }
 }
 
-class _VoicePulse extends StatefulWidget {
+// ============================================================
+// VOICE PULSE ANIMATION
+// ============================================================
+
+class _VoicePulse
+    extends StatefulWidget {
   const _VoicePulse();
 
   @override
-  State<_VoicePulse> createState() => _VoicePulseState();
+  State<_VoicePulse>
+      createState() =>
+          _VoicePulseState();
 }
 
-class _VoicePulseState extends State<_VoicePulse>
+class _VoicePulseState
+    extends State<_VoicePulse>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _scale;
+  late final AnimationController
+      _controller;
+
+  late final Animation<double>
+      _scale;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 850),
-    )..repeat(reverse: true);
 
-    _scale = Tween<double>(begin: .85, end: 1.18).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    _controller =
+        AnimationController(
+      vsync: this,
+      duration:
+          const Duration(
+        milliseconds: 850,
+      ),
+    )..repeat(
+            reverse: true,
+          );
+
+    _scale =
+        Tween<double>(
+      begin: 0.85,
+      end: 1.18,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve:
+            Curves.easeInOut,
+      ),
     );
   }
 
@@ -1020,9 +1953,11 @@ class _VoicePulseState extends State<_VoicePulse>
   Widget build(BuildContext context) {
     return ScaleTransition(
       scale: _scale,
-      child: const CircleAvatar(
+      child:
+          const CircleAvatar(
         radius: 12,
-        backgroundColor: Color(0xFFD84A4A),
+        backgroundColor:
+            Color(0xFFD84A4A),
         child: Icon(
           Icons.mic_rounded,
           size: 14,
@@ -1033,20 +1968,38 @@ class _VoicePulseState extends State<_VoicePulse>
   }
 }
 
-class _TypingIndicator extends StatefulWidget {
+// ============================================================
+// AI TYPING INDICATOR
+// ============================================================
+
+class _TypingIndicator
+    extends StatefulWidget {
   const _TypingIndicator();
 
   @override
-  State<_TypingIndicator> createState() => _TypingIndicatorState();
+  State<_TypingIndicator>
+      createState() =>
+          _TypingIndicatorState();
 }
 
-class _TypingIndicatorState extends State<_TypingIndicator> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+class _TypingIndicatorState
+    extends State<_TypingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController
+      _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+
+    _controller =
+        AnimationController(
+      vsync: this,
+      duration:
+          const Duration(
+        milliseconds: 1200,
+      ),
+    )..repeat();
   }
 
   @override
@@ -1058,164 +2011,397 @@ class _TypingIndicatorState extends State<_TypingIndicator> with SingleTickerPro
   @override
   Widget build(BuildContext context) {
     return Align(
-      alignment: Alignment.centerLeft,
+      alignment:
+          Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        margin:
+            const EdgeInsets.symmetric(
+          vertical: 5,
+        ),
+        padding:
+            const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: AppColors.borderLight),
+          borderRadius:
+              BorderRadius.circular(
+            17,
+          ),
+          border: Border.all(
+            color:
+                AppColors.borderLight,
+          ),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(3, (index) {
-            return AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                final delay = index * 0.2;
-                var progress = (_controller.value - delay).clamp(0.0, 1.0);
-                final offset = math.sin(progress * math.pi * 2) * -4;
-                return Transform.translate(
-                  offset: Offset(0, offset < 0 ? offset : 0),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(color: AppColors.muted, shape: BoxShape.circle),
-                  ),
-                );
-              },
-            );
-          }),
+          mainAxisSize:
+              MainAxisSize.min,
+          children:
+              List.generate(
+            3,
+            (index) {
+              return AnimatedBuilder(
+                animation:
+                    _controller,
+                builder:
+                    (
+                  context,
+                  child,
+                ) {
+                  final delay =
+                      index * 0.2;
+
+                  final progress =
+                      (_controller.value -
+                              delay)
+                          .clamp(
+                    0.0,
+                    1.0,
+                  );
+
+                  final offset =
+                      math.sin(
+                            progress *
+                                math.pi *
+                                2,
+                          ) *
+                          -4;
+
+                  return Transform.translate(
+                    offset: Offset(
+                      0,
+                      offset < 0
+                          ? offset
+                          : 0,
+                    ),
+                    child:
+                        Container(
+                      margin:
+                          const EdgeInsets
+                              .symmetric(
+                        horizontal:
+                            2,
+                      ),
+                      width: 6,
+                      height: 6,
+                      decoration:
+                          const BoxDecoration(
+                        color:
+                            AppColors.muted,
+                        shape:
+                            BoxShape.circle,
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
     );
   }
 }
 
-// ==========================================
+// ============================================================
 // 4. CONTROLLER / STATE MANAGEMENT
-// ==========================================
+// ============================================================
 
-class FaithCopilotController extends ChangeNotifier {
-  static final FaithCopilotController instance = FaithCopilotController._internal();
+class FaithCopilotController
+    extends ChangeNotifier {
+  static final FaithCopilotController
+      instance =
+      FaithCopilotController._internal();
+
   FaithCopilotController._internal() {
-    _messages.add(ChatMessage(
-      text: 'Hi! I’m Faith AI, your salon copilot. Tell me the look you want, your budget, or when you want to come in — I’ll help you narrow it down and get ready to book.',
-      isUser: false,
-    ));
+    _messages.add(
+      const ChatMessage(
+        text:
+            'Hi! I’m Faith AI, your salon copilot. Tell me the look you want, your budget, or when you want to come in — I’ll help you narrow it down and get ready to book.',
+        isUser: false,
+      ),
+    );
   }
 
-  final _supabase = Supabase.instance.client;
-  static const String _aiEndpoint = 'https://dinmax-ai-production.up.railway.app/chat';
-  
-  final List<ChatMessage> _messages = [];
-  List<ChatMessage> get messages => _messages;
-  bool get hasChatHistory => _messages.length > 1;
+  final SupabaseClient _supabase =
+      Supabase.instance.client;
+
+  static const String _aiEndpoint =
+      'https://dinmax-ai-production.up.railway.app/chat';
+
+  final List<ChatMessage>
+      _messages = [];
+
+  List<ChatMessage>
+      get messages =>
+          List.unmodifiable(
+            _messages,
+          );
+
+  bool get hasChatHistory =>
+      _messages.length > 1;
 
   bool _isLoading = false;
-  bool get isLoading => _isLoading;
+
+  bool get isLoading =>
+      _isLoading;
 
   bool _isLoadingData = true;
-  bool get isLoadingData => _isLoadingData;
+
+  bool get isLoadingData =>
+      _isLoadingData;
 
   bool _showBookingButton = false;
-  bool get showBookingButton => _showBookingButton;
 
-  final CustomerPreferences preferences = CustomerPreferences();
-  
-  List<Map<String, dynamic>> services = [];
-  List<Map<String, dynamic>> hairColors = [];
-  List<Map<String, dynamic>> availabilitySlots = [];
-  List<Map<String, dynamic>> bookingSignals = [];
-  
-  String? lastSuggestedServiceName;
+  bool get showBookingButton =>
+      _showBookingButton;
+
+  final CustomerPreferences preferences =
+      CustomerPreferences();
+
+  List<Map<String, dynamic>>
+      services = [];
+
+  List<Map<String, dynamic>>
+      hairColors = [];
+
+  List<Map<String, dynamic>>
+      availabilitySlots = [];
+
+  List<Map<String, dynamic>>
+      bookingSignals = [];
+
+  String?
+      lastSuggestedServiceName;
+
   DateTime? _lastSendAt;
 
-  Future<void> loadSalonData() async {
+  // ============================================================
+  // LOAD LIVE SALON DATA
+  // ============================================================
+
+  Future<void>
+      loadSalonData() async {
+    if (_isLoadingData &&
+        services.isNotEmpty) {
+      return;
+    }
+
     _isLoadingData = true;
     notifyListeners();
 
-    final today = DateTime.now().toIso8601String().split('T').first;
+    final today =
+        DateTime.now()
+            .toIso8601String()
+            .split('T')
+            .first;
+
+    // ----------------------------------------------------------
+    // SERVICES
+    // ----------------------------------------------------------
 
     try {
-      final rows = await _supabase
-          .from('services')
-          .select()
-          .eq('is_active', true)
-          .order('price', ascending: true);
-      services = List<Map<String, dynamic>>.from(rows);
-    } catch (_) {}
+      final rows =
+          await _supabase
+              .from('services')
+              .select()
+              .eq(
+                'is_active',
+                true,
+              )
+              .order(
+                'price',
+                ascending: true,
+              );
 
-    try {
-      final rows = await _supabase
-          .from('hair_colors')
-          .select()
-          .eq('is_active', true)
-          .order('code', ascending: true);
-      hairColors = List<Map<String, dynamic>>.from(rows);
-    } catch (_) {}
-
-    try {
-      final rows = await _supabase
-          .from('availability_slots')
-          .select()
-          .eq('is_available', true)
-          .gte('slot_date', today)
-          .order('slot_date', ascending: true)
-          .limit(100);
-      availabilitySlots = List<Map<String, dynamic>>.from(rows);
-    } catch (_) {
-      availabilitySlots = [];
+      services =
+          List<Map<String, dynamic>>
+              .from(rows);
+    } catch (error) {
+      debugPrint(
+        'Faith AI services error: $error',
+      );
     }
 
+    // ----------------------------------------------------------
+    // HAIR COLORS
+    // ----------------------------------------------------------
+
     try {
-      final rows = await _supabase
-          .from('bookings')
-          .select(
-            'service_id,booking_date,start_time,end_time,status,hair_color_code',
-          )
-          .gte('booking_date', today)
-          .inFilter('status', ['pending', 'confirmed'])
-          .order('booking_date', ascending: true)
-          .limit(100);
-      bookingSignals = List<Map<String, dynamic>>.from(rows);
-    } catch (_) {
+      final rows =
+          await _supabase
+              .from('hair_colors')
+              .select()
+              .eq(
+                'is_active',
+                true,
+              )
+              .order(
+                'code',
+                ascending: true,
+              );
+
+      hairColors =
+          List<Map<String, dynamic>>
+              .from(rows);
+    } catch (error) {
+      debugPrint(
+        'Faith AI hair colors error: $error',
+      );
+    }
+
+    // ----------------------------------------------------------
+    // AVAILABILITY
+    // ----------------------------------------------------------
+
+    try {
+      final rows =
+          await _supabase
+              .from(
+                'availability_slots',
+              )
+              .select()
+              .eq(
+                'is_available',
+                true,
+              )
+              .gte(
+                'slot_date',
+                today,
+              )
+              .order(
+                'slot_date',
+                ascending: true,
+              )
+              .limit(100);
+
+      availabilitySlots =
+          List<Map<String, dynamic>>
+              .from(rows);
+    } catch (error) {
+      availabilitySlots = [];
+
+      debugPrint(
+        'Faith AI availability error: $error',
+      );
+    }
+
+    // ----------------------------------------------------------
+    // SAFE BOOKING OCCUPANCY
+    // ----------------------------------------------------------
+
+    try {
+      final rows =
+          await _supabase
+              .from('bookings')
+              .select(
+                'service_id,booking_date,start_time,end_time,status,hair_color_code',
+              )
+              .gte(
+                'booking_date',
+                today,
+              )
+              .inFilter(
+                'status',
+                [
+                  'pending',
+                  'confirmed',
+                ],
+              )
+              .order(
+                'booking_date',
+                ascending: true,
+              )
+              .limit(100);
+
+      bookingSignals =
+          List<Map<String, dynamic>>
+              .from(rows);
+    } catch (error) {
       bookingSignals = [];
+
+      debugPrint(
+        'Faith AI booking occupancy error: $error',
+      );
     }
 
     _isLoadingData = false;
     notifyListeners();
   }
 
-  Future<void> sendMessage(String text) async {
-    final cleanText = text.trim();
-    if (cleanText.isEmpty || _isLoading) return;
+  // ============================================================
+  // SEND MESSAGE
+  // ============================================================
 
-    final now = DateTime.now();
-    if (_lastSendAt != null &&
-        now.difference(_lastSendAt!).inMilliseconds < 450) {
+  Future<void> sendMessage(
+    String text,
+  ) async {
+    final cleanText =
+        text.trim();
+
+    if (cleanText.isEmpty ||
+        _isLoading) {
       return;
     }
+
+    final now =
+        DateTime.now();
+
+    // Protect against rapid accidental double sends.
+    if (_lastSendAt != null &&
+        now
+                .difference(
+                  _lastSendAt!,
+                )
+                .inMilliseconds <
+            500) {
+      return;
+    }
+
     _lastSendAt = now;
 
-    preferences.extractAndRemember(cleanText);
-    _messages.add(ChatMessage(text: cleanText, isUser: true));
+    preferences.extractAndRemember(
+      cleanText,
+    );
+
+    _messages.add(
+      ChatMessage(
+        text: cleanText,
+        isUser: true,
+      ),
+    );
+
     _isLoading = true;
-    _showBookingButton =
-        _showBookingButton || _isBookingIntent(cleanText);
+
+    if (_isBookingIntent(cleanText)) {
+      _showBookingButton = true;
+    }
+
     notifyListeners();
 
     try {
-      final reply = await _fetchAIResponse(cleanText);
-      final cleanedReply = _removeRepeatedGreeting(reply);
-      _processAIResponse(cleanText, cleanedReply);
-    } catch (_) {
+      final reply =
+          await _fetchAIResponse(
+        cleanText,
+      );
+
+      final cleanedReply =
+          _cleanAIResponse(reply);
+
+      _processAIResponse(
+        cleanText,
+        cleanedReply,
+      );
+    } catch (error) {
+      debugPrint(
+        'Faith AI request error: $error',
+      );
+
       _messages.add(
-        ChatMessage(
+        const ChatMessage(
           text:
-              'I could not connect to Faith AI right now. Please try again in a moment.',
+              'I’m having trouble connecting right now. Please try again in a moment.',
           isUser: false,
         ),
       );
@@ -1225,25 +2411,52 @@ class FaithCopilotController extends ChangeNotifier {
     }
   }
 
-  void addSystemMessage(String text) {
-    _messages.add(ChatMessage(text: text, isUser: false));
+  void addSystemMessage(
+    String text,
+  ) {
+    _messages.add(
+      ChatMessage(
+        text: text,
+        isUser: false,
+      ),
+    );
+
     notifyListeners();
   }
 
-  String _removeRepeatedGreeting(String text) {
-    var cleaned = text.trimLeft();
+  // ============================================================
+  // CLEAN AI RESPONSE
+  // ============================================================
 
-    // Faith AI already has a welcome message in the chat. Do not let every
-    // subsequent response start with another greeting or self-introduction.
-    cleaned = cleaned.replaceFirst(
+  String _cleanAIResponse(
+    String text,
+  ) {
+    var cleaned =
+        text.trim();
+
+    if (cleaned.isEmpty) {
+      return text;
+    }
+
+    // ----------------------------------------------------------
+    // REMOVE REPEATED GREETINGS
+    // ----------------------------------------------------------
+
+    cleaned =
+        cleaned.replaceFirst(
       RegExp(
-        r'^(?:good\s+(?:morning|afternoon|evening)|hello(?:\s+again)?|hi(?:\s+again)?)[!,.:\-\s]*',
+        r'^(?:good\s+(?:morning|afternoon|evening)|hello(?:\s+again)?|hey(?:\s+again)?|hi(?:\s+again)?)[!,.:\-\s]*',
         caseSensitive: false,
       ),
       '',
     );
 
-    cleaned = cleaned.replaceFirst(
+    // ----------------------------------------------------------
+    // REMOVE REPEATED SELF INTRODUCTION
+    // ----------------------------------------------------------
+
+    cleaned =
+        cleaned.replaceFirst(
       RegExp(
         r"^(?:i['’]?m|i am)\s+faith\s+ai(?:,\s*your\s+salon\s+copilot)?[!,.:\-\s]*",
         caseSensitive: false,
@@ -1251,88 +2464,223 @@ class FaithCopilotController extends ChangeNotifier {
       '',
     );
 
-    if (cleaned.isEmpty) return text.trim();
-    return cleaned.trimLeft();
-  }
+    // Prevent accidental response duplication.
+    final trimmed =
+        cleaned.trim();
 
-  void _processAIResponse(String userText, String aiText) {
-    final detectedServices = _findServicesFromText(aiText);
+    if (trimmed.length >= 10 &&
+        trimmed.length.isEven) {
+      final midpoint =
+          trimmed.length ~/ 2;
 
-    if (detectedServices.isEmpty) {
-      detectedServices.addAll(_findServicesFromText(userText));
+      final first =
+          trimmed.substring(
+            0,
+            midpoint,
+          );
+
+      final second =
+          trimmed.substring(
+            midpoint,
+          );
+
+      if (first.trim().toLowerCase() ==
+          second.trim().toLowerCase()) {
+        cleaned =
+            first.trim();
+      }
     }
 
-    final imageAttachments = detectedServices
-        .map((service) {
-          final name = (service['name'] ?? 'Hairstyle').toString().trim();
-          final imageUrl = (service['image_url'] ?? '').toString().trim();
+    if (cleaned.trim().isEmpty) {
+      return text.trim();
+    }
 
-          if (imageUrl.isEmpty) return null;
+    return cleaned.trim();
+  }
 
-          return ServiceImageAttachment(
-            serviceName: name,
-            url: imageUrl,
-          );
-        })
-        .whereType<ServiceImageAttachment>()
-        .take(3)
-        .toList(growable: false);
+  // ============================================================
+  // PROCESS AI RESPONSE + IMAGES
+  // ============================================================
+
+  void _processAIResponse(
+    String userText,
+    String aiText,
+  ) {
+    final detectedServices =
+        _findServicesFromText(
+      aiText,
+    );
+
+    if (detectedServices.isEmpty) {
+      detectedServices.addAll(
+        _findServicesFromText(
+          userText,
+        ),
+      );
+    }
+
+    final imageAttachments =
+        detectedServices
+            .map(
+              (service) {
+                final name =
+                    (service['name'] ??
+                            'Hairstyle')
+                        .toString()
+                        .trim();
+
+                final imageUrl =
+                    (service[
+                                'image_url'] ??
+                            '')
+                        .toString()
+                        .trim();
+
+                if (imageUrl.isEmpty) {
+                  return null;
+                }
+
+                return ServiceImageAttachment(
+                  serviceName:
+                      name,
+                  url:
+                      imageUrl,
+                );
+              },
+            )
+            .whereType<
+                ServiceImageAttachment>()
+            .take(3)
+            .toList(
+              growable: false,
+            );
 
     _messages.add(
       ChatMessage(
         text: aiText,
         isUser: false,
-        serviceImages: imageAttachments,
+        serviceImages:
+            imageAttachments,
       ),
     );
 
-    if (detectedServices.isNotEmpty) {
+    if (detectedServices
+        .isNotEmpty) {
       lastSuggestedServiceName =
-          detectedServices.first['name']?.toString();
+          detectedServices
+              .first['name']
+              ?.toString();
     }
 
-    final lowerReply = aiText.toLowerCase();
-    if (_isBookingIntent(aiText) || lowerReply.contains('open booking')) {
-      _showBookingButton = true;
+    final lowerReply =
+        aiText.toLowerCase();
+
+    if (_isBookingIntent(aiText) ||
+        lowerReply.contains(
+          'tap the booking button',
+        ) ||
+        lowerReply.contains(
+          'open booking',
+        )) {
+      _showBookingButton =
+          true;
     }
   }
 
-  Future<String> _fetchAIResponse(String customerMessage) async {
-    final systemPrompt = AIContextBuilder.buildPrompt(this, customerMessage);
+  // ============================================================
+  // CALL AI BACKEND
+  // ============================================================
 
-    final response = await http
-        .post(
-          Uri.parse(_aiEndpoint),
-          headers: const {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode({'message': systemPrompt}),
-        )
-        .timeout(const Duration(seconds: 45));
+  Future<String>
+      _fetchAIResponse(
+    String customerMessage,
+  ) async {
+    final systemPrompt =
+        AIContextBuilder.buildPrompt(
+      this,
+      customerMessage,
+    );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Faith AI server returned ${response.statusCode}.');
+    final response =
+        await http
+            .post(
+              Uri.parse(
+                _aiEndpoint,
+              ),
+              headers:
+                  const {
+                'Content-Type':
+                    'application/json',
+                'Accept':
+                    'application/json',
+              },
+              body:
+                  jsonEncode(
+                {
+                  'message':
+                      systemPrompt,
+                },
+              ),
+            )
+            .timeout(
+              const Duration(
+                seconds: 45,
+              ),
+            );
+
+    if (response.statusCode <
+            200 ||
+        response.statusCode >=
+            300) {
+      throw Exception(
+        'Faith AI server returned ${response.statusCode}.',
+      );
     }
 
     dynamic decoded;
+
     try {
-      decoded = jsonDecode(response.body);
+      decoded =
+          jsonDecode(
+        response.body,
+      );
     } catch (_) {
-      final plain = response.body.trim();
-      if (plain.isNotEmpty) return plain;
-      throw Exception('Faith AI returned an empty response.');
+      final plain =
+          response.body.trim();
+
+      if (plain.isNotEmpty) {
+        return plain;
+      }
+
+      throw Exception(
+        'Faith AI returned an empty response.',
+      );
     }
 
-    final answer = _extractAIText(decoded);
+    final answer =
+        _extractAIText(
+      decoded,
+    );
+
     if (answer.isEmpty) {
-      throw Exception('Faith AI returned an unreadable response.');
+      throw Exception(
+        'Faith AI returned an unreadable response.',
+      );
     }
+
     return answer;
   }
 
-  String _extractAIText(dynamic data) {
-    if (data is String) return data.trim();
+  // ============================================================
+  // EXTRACT TEXT FROM BACKEND RESPONSE
+  // ============================================================
+
+  String _extractAIText(
+    dynamic data,
+  ) {
+    if (data is String) {
+      return data.trim();
+    }
 
     if (data is Map) {
       const directKeys = [
@@ -1345,23 +2693,43 @@ class FaithCopilotController extends ChangeNotifier {
         'output',
       ];
 
-      for (final key in directKeys) {
-        final value = data[key];
-        if (value is String && value.trim().isNotEmpty) {
+      for (final key
+          in directKeys) {
+        final value =
+            data[key];
+
+        if (value is String &&
+            value.trim().isNotEmpty) {
           return value.trim();
         }
       }
 
-      final choices = data['choices'];
-      if (choices is List && choices.isNotEmpty) {
-        final first = choices.first;
+      final choices =
+          data['choices'];
+
+      if (choices is List &&
+          choices.isNotEmpty) {
+        final first =
+            choices.first;
+
         if (first is Map) {
-          final message = first['message'];
-          if (message is Map && message['content'] is String) {
-            return (message['content'] as String).trim();
+          final message =
+              first['message'];
+
+          if (message is Map &&
+              message['content']
+                  is String) {
+            return (message[
+                        'content']
+                    as String)
+                .trim();
           }
-          if (first['text'] is String) {
-            return (first['text'] as String).trim();
+
+          if (first['text']
+              is String) {
+            return (first['text']
+                    as String)
+                .trim();
           }
         }
       }
@@ -1370,148 +2738,267 @@ class FaithCopilotController extends ChangeNotifier {
     return '';
   }
 
-  Map<String, dynamic>? getSuggestedService() {
-    if (lastSuggestedServiceName == null) return null;
-    try {
-      return services.firstWhere((s) => s['name'] == lastSuggestedServiceName);
-    } catch (_) {
+  // ============================================================
+  // SUGGESTED SERVICE
+  // ============================================================
+
+  Map<String, dynamic>?
+      getSuggestedService() {
+    if (lastSuggestedServiceName ==
+        null) {
       return null;
     }
-  }
 
-  bool _isBookingIntent(String text) {
-    final lower = text.toLowerCase();
-    return lower.contains('book') ||
-        lower.contains('appointment') ||
-        lower.contains('schedule') ||
-        lower.contains('reserve') ||
-        lower.contains('availability') ||
-        lower.contains('available time') ||
-        lower.contains('open time');
-  }
+    final target =
+        lastSuggestedServiceName!
+            .trim()
+            .toLowerCase();
 
-  List<Map<String, dynamic>> _findServicesFromText(String text) {
-    final lower = text.toLowerCase();
-    final matches = <Map<String, dynamic>>[];
-    final seen = <String>{};
-
-    void addService(Map<String, dynamic> service) {
-      final key = service['id']?.toString() ??
-          service['name']?.toString().toLowerCase() ??
-          '';
-
-      if (key.isEmpty || seen.contains(key)) return;
-      seen.add(key);
-      matches.add(service);
-    }
-
-    for (final service in services) {
+    for (final service
+        in services) {
       final name =
-          service['name']?.toString().trim().toLowerCase() ?? '';
-      if (name.isNotEmpty && lower.contains(name)) {
-        addService(service);
-      }
-    }
+          (service['name'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
 
-    const aliases = <String, List<String>>{
-      'knotless': ['knotless'],
-      'fulani': ['fulani'],
-      'lemonade': ['lemonade'],
-      'senegalese': ['senegalese'],
-      'passion': ['passion twist', 'passion twists'],
-      'box braid': ['box braid', 'box braids'],
-      'twist': ['twist', 'twists'],
-      'cornrow': ['cornrow', 'cornrows'],
-      'boho': ['boho'],
-      'spring': ['spring twist', 'spring'],
-      'kids': ['kids', 'kid', 'child'],
-      'loc': ['loc', 'locs'],
-    };
-
-    for (final entry in aliases.entries) {
-      if (!entry.value.any(lower.contains)) continue;
-
-      for (final service in services) {
-        final name =
-            service['name']?.toString().trim().toLowerCase() ?? '';
-        final category =
-            service['category']?.toString().trim().toLowerCase() ?? '';
-
-        if (name.contains(entry.key) || category.contains(entry.key)) {
-          addService(service);
-        }
-      }
-    }
-
-    return matches.take(3).toList(growable: false);
-  }
-
-  Map<String, dynamic>? _findServiceFromText(String text) {
-    final lower = text.toLowerCase();
-
-    for (final service in services) {
-      final name = service['name']?.toString().trim().toLowerCase() ?? '';
-      if (name.isNotEmpty && lower.contains(name)) return service;
-    }
-
-    const aliases = <String, List<String>>{
-      'knotless': ['knotless'],
-      'fulani': ['fulani'],
-      'lemonade': ['lemonade'],
-      'senegalese': ['senegalese'],
-      'twist': ['twist', 'twists'],
-      'cornrow': ['cornrow', 'cornrows'],
-      'boho': ['boho'],
-      'spring': ['spring twist', 'spring'],
-      'kids': ['kids', 'kid', 'child'],
-      'loc': ['loc', 'locs'],
-    };
-
-    for (final entry in aliases.entries) {
-      if (!entry.value.any(lower.contains)) continue;
-
-      for (final service in services) {
-        final name =
-            service['name']?.toString().trim().toLowerCase() ?? '';
-        final category =
-            service['category']?.toString().trim().toLowerCase() ?? '';
-
-        if (name.contains(entry.key) || category.contains(entry.key)) {
-          return service;
-        }
+      if (name == target) {
+        return service;
       }
     }
 
     return null;
   }
 
+  // ============================================================
+  // BOOKING INTENT
+  // ============================================================
+
+  bool _isBookingIntent(
+    String text,
+  ) {
+    final lower =
+        text.toLowerCase();
+
+    return lower.contains(
+          'book',
+        ) ||
+        lower.contains(
+          'booking',
+        ) ||
+        lower.contains(
+          'appointment',
+        ) ||
+        lower.contains(
+          'schedule',
+        ) ||
+        lower.contains(
+          'reserve',
+        ) ||
+        lower.contains(
+          'availability',
+        ) ||
+        lower.contains(
+          'available time',
+        ) ||
+        lower.contains(
+          'open time',
+        );
+  }
+
+  // ============================================================
+  // FIND SERVICES IN TEXT
+  // ============================================================
+
+  List<Map<String, dynamic>>
+      _findServicesFromText(
+    String text,
+  ) {
+    final lower =
+        text.toLowerCase();
+
+    final matches =
+        <Map<String, dynamic>>[];
+
+    final seen =
+        <String>{};
+
+    void addService(
+      Map<String, dynamic>
+          service,
+    ) {
+      final key =
+          service['id']
+                  ?.toString() ??
+              service['name']
+                  ?.toString()
+                  .toLowerCase() ??
+              '';
+
+      if (key.isEmpty ||
+          seen.contains(key)) {
+        return;
+      }
+
+      seen.add(key);
+
+      matches.add(service);
+    }
+
+    // Exact service names
+    for (final service
+        in services) {
+      final name =
+          service['name']
+                  ?.toString()
+                  .trim()
+                  .toLowerCase() ??
+              '';
+
+      if (name.isNotEmpty &&
+          lower.contains(name)) {
+        addService(service);
+      }
+    }
+
+    // Common hairstyle aliases
+    const aliases =
+        <String, List<String>>{
+      'knotless': [
+        'knotless',
+        'knotless braid',
+        'knotless braids',
+      ],
+      'fulani': [
+        'fulani',
+        'fulani braids',
+      ],
+      'lemonade': [
+        'lemonade',
+        'lemonade braids',
+      ],
+      'senegalese': [
+        'senegalese',
+        'senegalese twist',
+        'senegalese twists',
+      ],
+      'passion': [
+        'passion twist',
+        'passion twists',
+      ],
+      'box braid': [
+        'box braid',
+        'box braids',
+      ],
+      'cornrow': [
+        'cornrow',
+        'cornrows',
+      ],
+      'boho': [
+        'boho',
+        'bohemian',
+      ],
+      'spring': [
+        'spring twist',
+        'spring twists',
+      ],
+      'kids': [
+        'kids',
+        'kid',
+        'child',
+        'children',
+      ],
+      'loc': [
+        'loc',
+        'locs',
+        'soft loc',
+        'soft locs',
+      ],
+      'twist': [
+        'twist',
+        'twists',
+      ],
+    };
+
+    for (final entry
+        in aliases.entries) {
+      final detected =
+          entry.value.any(
+        (alias) =>
+            lower.contains(alias),
+      );
+
+      if (!detected) {
+        continue;
+      }
+
+      for (final service
+          in services) {
+        final name =
+            service['name']
+                    ?.toString()
+                    .trim()
+                    .toLowerCase() ??
+                '';
+
+        final category =
+            service['category']
+                    ?.toString()
+                    .trim()
+                    .toLowerCase() ??
+                '';
+
+        if (name.contains(
+              entry.key,
+            ) ||
+            category.contains(
+              entry.key,
+            )) {
+          addService(service);
+        }
+      }
+    }
+
+    return matches
+        .take(3)
+        .toList(
+          growable: false,
+        );
+  }
 }
 
-// ==========================================
-// 5. DATA CLASSES & UTILS
-// ==========================================
+// ============================================================
+// 5. DATA CLASSES
+// ============================================================
 
 class ServiceImageAttachment {
-  final String serviceName;
-  final String url;
-
   const ServiceImageAttachment({
     required this.serviceName,
     required this.url,
   });
+
+  final String serviceName;
+  final String url;
 }
 
 class ChatMessage {
-  final String text;
-  final bool isUser;
-  final List<ServiceImageAttachment> serviceImages;
-
   const ChatMessage({
     required this.text,
     required this.isUser,
-    this.serviceImages = const [],
+    this.serviceImages =
+        const [],
   });
+
+  final String text;
+  final bool isUser;
+
+  final List<ServiceImageAttachment>
+      serviceImages;
 }
+
+// ============================================================
+// CUSTOMER PREFERENCES
+// ============================================================
 
 class CustomerPreferences {
   String? budget;
@@ -1521,47 +3008,85 @@ class CustomerPreferences {
   String? occasion;
   String? datePreference;
 
-  void extractAndRemember(String text) {
-    final lower = text.toLowerCase();
+  void extractAndRemember(
+    String text,
+  ) {
+    final lower =
+        text.toLowerCase();
 
-    final budgetMatch = RegExp(
-      r'(?:\$\s*|budget(?:\s+is|\s+of|\s+around|\s+about|\s+under)?\s*\$?)(\d{2,4})',
+    // ----------------------------------------------------------
+    // BUDGET
+    // ----------------------------------------------------------
+
+    final budgetMatch =
+        RegExp(
+      r'(?:\$\s*|budget(?:\s+is|\s+of|\s+around|\s+about|\s+under|\s+below|\s+maximum|\s+max)?\s*\$?)(\d{2,4})',
       caseSensitive: false,
     ).firstMatch(text);
+
     if (budgetMatch != null) {
-      budget = '\$${budgetMatch.group(1)}';
+      budget =
+          '\$${budgetMatch.group(1)}';
     }
+
+    // ----------------------------------------------------------
+    // LENGTH
+    // ----------------------------------------------------------
 
     for (final value in [
       'shoulder',
+      'shoulder length',
       'midback',
       'mid back',
       'waist',
+      'waist length',
       'top butt',
       'mid butt',
       'under butt',
       'butt length',
     ]) {
-      if (lower.contains(value)) length = value;
+      if (lower.contains(value)) {
+        length = value;
+      }
     }
+
+    // ----------------------------------------------------------
+    // BRAID SIZE
+    // ----------------------------------------------------------
 
     for (final value in [
       'jumbo',
       'large',
       'small medium',
+      'small-medium',
       'semi-medium',
       'semi medium',
       'medium',
       'small',
     ]) {
-      if (lower.contains(value)) size = value;
+      if (lower.contains(value)) {
+        size = value;
+      }
     }
 
-    final colorMatch = RegExp(
+    // ----------------------------------------------------------
+    // HAIR COLOR
+    // ----------------------------------------------------------
+
+    final colorMatch =
+        RegExp(
       r'(?:color|colour)\s*(?:#|number|no\.?|code)?\s*([0-9]{1,3}[a-z]?)',
       caseSensitive: false,
     ).firstMatch(text);
-    if (colorMatch != null) color = colorMatch.group(1);
+
+    if (colorMatch != null) {
+      color =
+          colorMatch.group(1);
+    }
+
+    // ----------------------------------------------------------
+    // OCCASION
+    // ----------------------------------------------------------
 
     for (final value in [
       'birthday',
@@ -1572,11 +3097,19 @@ class CustomerPreferences {
       'party',
       'photoshoot',
       'photo shoot',
+      'graduation',
+      'anniversary',
     ]) {
-      if (lower.contains(value)) occasion = value;
+      if (lower.contains(value)) {
+        occasion = value;
+      }
     }
 
-    final dateWords = [
+    // ----------------------------------------------------------
+    // DATE / TIME
+    // ----------------------------------------------------------
+
+    const dateWords = [
       'today',
       'tomorrow',
       'monday',
@@ -1590,104 +3123,270 @@ class CustomerPreferences {
       'afternoon',
       'evening',
     ];
-    final mentioned = dateWords.where(lower.contains).toList();
-    if (mentioned.isNotEmpty) datePreference = mentioned.join(', ');
+
+    final mentioned =
+        dateWords
+            .where(
+              (word) =>
+                  lower.contains(
+                word,
+              ),
+            )
+            .toList();
+
+    if (mentioned.isNotEmpty) {
+      datePreference =
+          mentioned.join(', ');
+    }
   }
 
   String toContextString() {
-    final list = [
-      if (budget != null) 'Budget: $budget',
-      if (length != null) 'Length: $length',
-      if (size != null) 'Size: $size',
-      if (color != null) 'Color: $color',
-      if (occasion != null) 'Occasion: $occasion',
-      if (datePreference != null) 'Date/time preference: $datePreference',
+    final list =
+        <String>[
+      if (budget != null)
+        'Budget: $budget',
+      if (length != null)
+        'Length: $length',
+      if (size != null)
+        'Size: $size',
+      if (color != null)
+        'Color: $color',
+      if (occasion != null)
+        'Occasion: $occasion',
+      if (datePreference != null)
+        'Date/time preference: $datePreference',
     ];
-    return list.isEmpty ? 'No preferences set.' : list.join('\n');
+
+    return list.isEmpty
+        ? 'No preferences set.'
+        : list.join('\n');
   }
 }
+
+// ============================================================
+// 6. AI CONTEXT BUILDER
+// ============================================================
 
 class AIContextBuilder {
   static String buildPrompt(
     FaithCopilotController controller,
     String latestMessage,
   ) {
-    final serviceContext = controller.services.isEmpty
-        ? 'No live service records are currently available.'
-        : controller.services.map((service) {
-            final name = (service['name'] ?? '').toString().trim();
-            final category = (service['category'] ?? '').toString().trim();
-            final description =
-                (service['description'] ?? '').toString().trim();
-            final price = _money(service['price']);
-            final duration = _duration(service['duration_minutes']);
-            final imageUrl =
-                (service['image_url'] ?? '').toString().trim();
+    // ----------------------------------------------------------
+    // LIVE SERVICE CONTEXT
+    // ----------------------------------------------------------
 
-            return '- $name | category: $category | starting price: $price | '
-                'duration: $duration | description: $description | '
-                'image_url: ${imageUrl.isEmpty ? 'none' : imageUrl}';
-          }).join('\n');
+    final serviceContext =
+        controller.services.isEmpty
+            ? 'No live service records are currently available.'
+            : controller.services
+                .map(
+                  (service) {
+                    final name =
+                        (service['name'] ??
+                                '')
+                            .toString()
+                            .trim();
 
-    final colorContext = controller.hairColors.isEmpty
-        ? 'No live hair-color records are currently available.'
-        : controller.hairColors.map((item) {
-            final code = (item['code'] ?? '').toString().trim();
-            final name = (item['name'] ?? '').toString().trim();
-            return '- $code: $name';
-          }).join('\n');
+                    final category =
+                        (service[
+                                    'category'] ??
+                                '')
+                            .toString()
+                            .trim();
 
-    final availabilityContext = controller.availabilitySlots.isEmpty
-        ? 'No dedicated availability-slot records were returned.'
-        : controller.availabilitySlots.take(60).map((slot) {
-            return '- ${slot['slot_date']} | '
-                '${slot['start_time']} to ${slot['end_time']}';
-          }).join('\n');
+                    final description =
+                        (service[
+                                    'description'] ??
+                                '')
+                            .toString()
+                            .trim();
 
-    final occupancyContext = controller.bookingSignals.isEmpty
-        ? 'No customer-safe future booking occupancy records were returned.'
-        : controller.bookingSignals.take(60).map((booking) {
-            return '- service_id: ${booking['service_id']} | '
-                'date: ${booking['booking_date']} | '
-                'time: ${booking['start_time']} to ${booking['end_time']} | '
-                'status: ${booking['status']}';
-          }).join('\n');
+                    final price =
+                        _money(
+                      service[
+                          'price'],
+                    );
 
-    final recentMessages = controller.messages.length > 18
-        ? controller.messages.sublist(controller.messages.length - 18)
-        : controller.messages;
+                    final duration =
+                        _duration(
+                      service[
+                          'duration_minutes'],
+                    );
 
-    final chatContext = recentMessages.map((message) {
-      return '${message.isUser ? 'Customer' : 'Faith AI'}: ${message.text}';
-    }).join('\n');
+                    final imageUrl =
+                        (service[
+                                    'image_url'] ??
+                                '')
+                            .toString()
+                            .trim();
+
+                    return '- $name | '
+                        'category: $category | '
+                        'starting price: $price | '
+                        'duration: $duration | '
+                        'description: $description | '
+                        'image_url: ${imageUrl.isEmpty ? 'none' : imageUrl}';
+                  },
+                )
+                .join('\n');
+
+    // ----------------------------------------------------------
+    // HAIR COLORS
+    // ----------------------------------------------------------
+
+    final colorContext =
+        controller.hairColors.isEmpty
+            ? 'No live hair-color records are currently available.'
+            : controller.hairColors
+                .map(
+                  (item) {
+                    final code =
+                        (item['code'] ??
+                                '')
+                            .toString()
+                            .trim();
+
+                    final name =
+                        (item['name'] ??
+                                '')
+                            .toString()
+                            .trim();
+
+                    return '- $code: $name';
+                  },
+                )
+                .join('\n');
+
+    // ----------------------------------------------------------
+    // AVAILABILITY
+    // ----------------------------------------------------------
+
+    final availabilityContext =
+        controller
+                .availabilitySlots
+                .isEmpty
+            ? 'No dedicated availability-slot records were returned.'
+            : controller
+                .availabilitySlots
+                .take(60)
+                .map(
+                  (slot) {
+                    return '- ${slot['slot_date']} | '
+                        '${slot['start_time']} to ${slot['end_time']}';
+                  },
+                )
+                .join('\n');
+
+    // ----------------------------------------------------------
+    // SAFE OCCUPANCY
+    // ----------------------------------------------------------
+
+    final occupancyContext =
+        controller
+                .bookingSignals
+                .isEmpty
+            ? 'No customer-safe future booking occupancy records were returned.'
+            : controller
+                .bookingSignals
+                .take(60)
+                .map(
+                  (booking) {
+                    return '- service_id: ${booking['service_id']} | '
+                        'date: ${booking['booking_date']} | '
+                        'time: ${booking['start_time']} to ${booking['end_time']} | '
+                        'status: ${booking['status']}';
+                  },
+                )
+                .join('\n');
+
+    // ----------------------------------------------------------
+    // RECENT CHAT
+    // ----------------------------------------------------------
+
+    final allMessages =
+        controller.messages;
+
+    final recentMessages =
+        allMessages.length > 18
+            ? allMessages.sublist(
+                allMessages.length - 18,
+              )
+            : allMessages;
+
+    final chatContext =
+        recentMessages
+            .map(
+              (message) {
+                return '${message.isUser ? 'Customer' : 'Faith AI'}: ${message.text}';
+              },
+            )
+            .join('\n');
+
+    // ----------------------------------------------------------
+    // FINAL AI PROMPT
+    // ----------------------------------------------------------
 
     return '''
-You are Faith AI Copilot, the customer-facing salon assistant for Faith Hair Style.
+You are Faith AI Copilot, the professional customer-facing salon assistant for Faith Hair Style.
 
-GOAL
-Help the customer choose a hairstyle using the LIVE salon data below, explain
-starting prices and durations, remember their preferences, and guide them toward
-booking when they are ready.
+PRIMARY GOAL
+Help customers choose hairstyles using the LIVE SALON DATA below. Help them understand starting prices, duration, hairstyle options, hair colors, and available appointment times. Remember useful preferences during the conversation and guide customers toward booking when appropriate.
 
-RULES
-- LIVE SERVICES is the source of truth for names, prices, durations, descriptions,
-  categories, and service image URLs.
-- Always say "starting at" when discussing a service price.
-- Never invent a price, duration, service, hair color, discount, deposit,
-  cancellation rule, payment method, or appointment availability.
-- A business-hour time is not confirmed availability.
-- Do not reveal or infer another customer's name, phone, email, notes, or messages.
-- SAFE BOOKING OCCUPANCY contains timing/status signals only.
-- The app automatically displays the real Supabase image for services you mention.
-- Do NOT output Markdown image syntax or raw image URLs.
-- Never invent an image URL.
-- When the customer is ready to book a known service, tell them to tap the booking button.
-- Be concise, friendly, and useful. Ask at most one important follow-up question at a time.
-- The chat already contains Faith AI's welcome and introduction.
-- Do NOT begin normal follow-up replies with "Good morning", "Good afternoon",
-  "Good evening", "Hello", or "Hi".
-- Do NOT repeatedly introduce yourself as Faith AI or say "I'm Faith AI".
-- After the initial welcome, respond directly to the customer's latest message.
+CONVERSATION STYLE
+- Sound warm, natural, confident, professional, and concise.
+- Speak like an experienced salon assistant.
+- Respond directly to the customer's latest message.
+- Do not repeat information unnecessarily.
+- Ask no more than ONE important follow-up question at a time.
+- Do not overwhelm the customer with long paragraphs.
+- When useful, provide 2 or 3 relevant choices instead of a huge list.
+- Never repeatedly greet the customer.
+- Never repeatedly introduce yourself.
+- The customer already received the initial Faith AI welcome message.
+
+SALON DATA RULES
+- LIVE SERVICES is the source of truth for hairstyle names, service categories, descriptions, prices, durations, and service images.
+- Always use the exact live service information when available.
+- Always say "starting at" when discussing service prices.
+- Never invent a service.
+- Never invent a price.
+- Never invent a duration.
+- Never invent a discount.
+- Never invent a deposit.
+- Never invent a cancellation rule.
+- Never invent a payment method.
+- Never invent a hair color.
+- Never invent appointment availability.
+- Business hours do NOT automatically mean an appointment is available.
+
+BOOKING RULES
+- LIVE AVAILABILITY contains the salon's appointment availability information.
+- SAFE BOOKING OCCUPANCY contains timing/status information only.
+- Never expose or infer another customer's personal information.
+- Never reveal another customer's name, phone number, email, notes, messages, or identifying details.
+- If a customer clearly wants to book a known service, tell them to tap the booking button.
+- If the customer says "book" without clearly identifying a hairstyle, ask which hairstyle they want.
+- If the customer asks to book a service that does not exist in LIVE SERVICES, explain that you cannot find that exact service and help them choose the closest real service.
+- Do not pretend that a booking has been completed unless the app actually completes it.
+
+IMAGE RULES
+- The Flutter app automatically displays the real Supabase image for services you mention.
+- Do NOT output Markdown image syntax.
+- Do NOT output raw image URLs.
+- Do NOT invent image URLs.
+
+GREETING RULES
+- Do NOT begin normal follow-up replies with:
+  "Good morning"
+  "Good afternoon"
+  "Good evening"
+  "Hello"
+  "Hi"
+  "Hey"
+- Do NOT repeatedly say "I'm Faith AI".
+- Do NOT repeatedly say "I am Faith AI".
+- After the first welcome, go directly into helping the customer.
 
 CUSTOMER PREFERENCES
 ${controller.preferences.toContextString()}
@@ -1709,41 +3408,103 @@ $chatContext
 
 LATEST CUSTOMER MESSAGE
 $latestMessage
+
+Now respond only as Faith AI Copilot to the customer's latest message.
 ''';
   }
 
-  static String _money(dynamic value) {
-    if (value == null) return 'not listed';
-    final parsed = double.tryParse(value.toString());
-    if (parsed == null) return value.toString();
-    if (parsed == parsed.roundToDouble()) {
+  // ============================================================
+  // PRICE FORMATTER
+  // ============================================================
+
+  static String _money(
+    dynamic value,
+  ) {
+    if (value == null) {
+      return 'not listed';
+    }
+
+    final parsed =
+        double.tryParse(
+      value.toString(),
+    );
+
+    if (parsed == null) {
+      return value.toString();
+    }
+
+    if (parsed ==
+        parsed.roundToDouble()) {
       return '\$${parsed.toStringAsFixed(0)}';
     }
+
     return '\$${parsed.toStringAsFixed(2)}';
   }
 
-  static String _duration(dynamic value) {
-    final minutes = int.tryParse(value?.toString() ?? '');
-    if (minutes == null || minutes <= 0) return 'not listed';
+  // ============================================================
+  // DURATION FORMATTER
+  // ============================================================
 
-    final hours = minutes ~/ 60;
-    final remainder = minutes % 60;
+  static String _duration(
+    dynamic value,
+  ) {
+    final minutes =
+        int.tryParse(
+      value?.toString() ?? '',
+    );
 
-    if (hours == 0) return '$minutes minutes';
+    if (minutes == null ||
+        minutes <= 0) {
+      return 'not listed';
+    }
+
+    final hours =
+        minutes ~/ 60;
+
+    final remainder =
+        minutes % 60;
+
+    if (hours == 0) {
+      return '$minutes minutes';
+    }
+
     if (remainder == 0) {
       return '$hours ${hours == 1 ? 'hour' : 'hours'}';
     }
+
     return '$hours hr $remainder min';
   }
 }
 
+// ============================================================
+// 7. APP COLORS
+// ============================================================
+
 class AppColors {
-  static const Color navy = Color(0xFF071A42);
-  static const Color deepBlue = Color(0xFF0A2D6E);
-  static const Color royalBlue = Color(0xFF0754AD);
-  static const Color gold = Color(0xFFE4AD16);
-  static const Color deepGold = Color(0xFF9A6800);
-  static const Color pageBackground = Color(0xFFF6F8FC);
-  static const Color borderGold = Color(0xFFD8B649);
-  static const Color borderLight = Color(0xFFE6EAF2);
-  static const Color muted = Color(0xFF667085);
+  static const Color navy =
+      Color(0xFF071A42);
+
+  static const Color deepBlue =
+      Color(0xFF0A2D6E);
+
+  static const Color royalBlue =
+      Color(0xFF0754AD);
+
+  static const Color gold =
+      Color(0xFFE4AD16);
+
+  static const Color deepGold =
+      Color(0xFF9A6800);
+
+  static const Color pageBackground =
+      Color(0xFFF6F8FC);
+
+  static const Color borderGold =
+      Color(0xFFD8B649);
+
+  static const Color borderLight =
+      Color(0xFFE6EAF2);
+
+  static const Color muted =
+      Color(0xFF667085);
+}
