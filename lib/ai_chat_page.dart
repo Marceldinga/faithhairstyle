@@ -1,7 +1,10 @@
-import 'dart:convert';
+
+importimport 'dart:convert';
 import 'dart:math' as math;
+ 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -314,7 +317,22 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       onResult: (result) {
         if (!mounted) return;
 
-        final words = result.recognizedWords.trim();
+        final rawWords = result.recognizedWords.trim();
+        var words = rawWords;
+
+        // Some mobile browsers can return the same recognition result twice
+        // joined together, for example: "hellohello" or
+        // "good morninggood morning". Collapse an exact repeated half.
+        if (rawWords.length >= 2 && rawWords.length.isEven) {
+          final half = rawWords.length ~/ 2;
+          final firstHalf = rawWords.substring(0, half);
+          final secondHalf = rawWords.substring(half);
+
+          if (firstHalf.toLowerCase() == secondHalf.toLowerCase()) {
+            words = firstHalf;
+          }
+        }
+
         if (words.isNotEmpty) {
           _textController.value = TextEditingValue(
             text: words,
@@ -1729,4 +1747,3 @@ class AppColors {
   static const Color borderGold = Color(0xFFD8B649);
   static const Color borderLight = Color(0xFFE6EAF2);
   static const Color muted = Color(0xFF667085);
-}
