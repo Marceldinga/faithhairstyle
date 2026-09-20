@@ -30,49 +30,87 @@ class _FaithAICopilotShellState extends State<FaithAICopilotShell> {
   bool _isOpen = false;
 
   void _toggleChat() {
+    if (_isOpen) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
     setState(() => _isOpen = !_isOpen);
   }
 
   @override
   Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final isPhone = screen.width < 600;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+
     return Stack(
       children: [
         widget.child,
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: SafeArea(
-            minimum: const EdgeInsets.only(bottom: 4),
+        if (_isOpen && isPhone)
+          Positioned.fill(
             child: Material(
-              color: Colors.transparent,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) {
-                  return ScaleTransition(
-                    scale: CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutBack,
-                    ),
-                    alignment: Alignment.bottomRight,
-                    child: FadeTransition(opacity: animation, child: child),
-                  );
-                },
-                child: _isOpen
-                    ? FaithAICopilotPanel(
-                        key: const ValueKey('panel'),
-                        navigatorKey: widget.navigatorKey,
-                        onClose: _toggleChat,
-                        onMinimize: _toggleChat,
-                      )
-                    : _CopilotLauncher(
-                        key: const ValueKey('launcher'),
-                        hasActiveChat: FaithCopilotController.instance.hasChatHistory,
-                        onTap: _toggleChat,
+              color: AppColors.pageBackground,
+              child: SafeArea(
+                child: AnimatedPadding(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  padding: EdgeInsets.only(bottom: keyboardInset),
+                  child: FaithAICopilotPanel(
+                    key: const ValueKey('mobile-panel'),
+                    navigatorKey: widget.navigatorKey,
+                    onClose: _toggleChat,
+                    onMinimize: _toggleChat,
+                  ),
+                ),
+              ),
+            ),
+          )
+        else
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: SafeArea(
+              minimum: const EdgeInsets.only(bottom: 4),
+              child: Material(
+                color: Colors.transparent,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, animation) {
+                    return ScaleTransition(
+                      scale: CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutBack,
                       ),
+                      alignment: Alignment.bottomRight,
+                      child: FadeTransition(opacity: animation, child: child),
+                    );
+                  },
+                  child: _CopilotLauncher(
+                    key: const ValueKey('launcher'),
+                    hasActiveChat:
+                        FaithCopilotController.instance.hasChatHistory,
+                    onTap: _toggleChat,
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+        if (_isOpen && !isPhone)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: SafeArea(
+              minimum: const EdgeInsets.only(bottom: 4),
+              child: Material(
+                color: Colors.transparent,
+                child: FaithAICopilotPanel(
+                  key: const ValueKey('desktop-panel'),
+                  navigatorKey: widget.navigatorKey,
+                  onClose: _toggleChat,
+                  onMinimize: _toggleChat,
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -164,18 +202,20 @@ class AIChatPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPhone = MediaQuery.sizeOf(context).width < 600;
+
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
-      appBar: AppBar(
-        title: const Text('Faith AI'),
-        backgroundColor: AppColors.navy,
-        foregroundColor: Colors.white,
-      ),
+      appBar: isPhone
+          ? null
+          : AppBar(
+              title: const Text('Faith AI'),
+              backgroundColor: AppColors.navy,
+              foregroundColor: Colors.white,
+            ),
       body: SafeArea(
-        child: Center(
-          child: FaithAICopilotPanel(
-            navigatorKey: navigatorKey,
-          ),
+        child: FaithAICopilotPanel(
+          navigatorKey: navigatorKey,
         ),
       ),
     );
@@ -309,26 +349,12 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
 
     await _speech.listen(
       listenMode: stt.ListenMode.dictation,
-      partialResults: true,
+      partialResults: false,
       cancelOnError: true,
       onResult: (result) {
         if (!mounted) return;
 
-        final rawWords = result.recognizedWords.trim();
-        var words = rawWords;
-
-        // Some mobile browsers can return the same recognition result twice
-        // joined together, for example: "hellohello" or
-        // "good morninggood morning". Collapse an exact repeated half.
-        if (rawWords.length >= 2 && rawWords.length.isEven) {
-          final half = rawWords.length ~/ 2;
-          final firstHalf = rawWords.substring(0, half);
-          final secondHalf = rawWords.substring(half);
-
-          if (firstHalf.toLowerCase() == secondHalf.toLowerCase()) {
-            words = firstHalf;
-          }
-        }
+        final words = _cleanSpeechText(result.recognizedWords);
 
         if (words.isNotEmpty) {
           _textController.value = TextEditingValue(
@@ -342,6 +368,73 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
         }
       },
     );
+  }
+
+  String _cleanSpeechText(String raw) {
+    var text = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (text.isEmpty) return text;
+
+    // Collapse a fully duplicated result, for example
+    // "good morninggood morning" -> "good morning".
+    for (var pass = 0; pass < 3; pass++) {
+      if (text.length < 6 || !text.length.isEven) break;
+      final half = text.length ~/ 2;
+      final first = text.substring(0, half);
+      final second = text.substring(half);
+      if (first.toLowerCase() != second.toLowerCase()) break;
+      text = first.trim();
+    }
+
+    // Collapse a duplicated word with no space, for example
+    // "hellohello" -> "hello".
+    final tokens = text.split(' ');
+    for (var i = 0; i < tokens.length; i++) {
+      final token = tokens[i];
+      final match = RegExp(r"^([A-Za-z][A-Za-z'’\-]*)([.,!?;:]*)$")
+          .firstMatch(token);
+      if (match == null) continue;
+
+      final core = match.group(1)!;
+      final punctuation = match.group(2) ?? '';
+      if (core.length < 6 || !core.length.isEven) continue;
+
+      final half = core.length ~/ 2;
+      final first = core.substring(0, half);
+      final second = core.substring(half);
+      if (first.length >= 3 && first.toLowerCase() == second.toLowerCase()) {
+        tokens[i] = '$first$punctuation';
+      }
+    }
+
+    // Collapse adjacent repeated words or short phrases, for example
+    // "hello hello" or "good morning good morning".
+    var words = tokens;
+    var changed = true;
+    while (changed && words.length >= 2) {
+      changed = false;
+      final maxBlock = math.min(4, words.length ~/ 2);
+
+      for (var block = 1; block <= maxBlock && !changed; block++) {
+        for (var start = 0; start + (block * 2) <= words.length; start++) {
+          var same = true;
+          for (var j = 0; j < block; j++) {
+            if (words[start + j].toLowerCase() !=
+                words[start + block + j].toLowerCase()) {
+              same = false;
+              break;
+            }
+          }
+
+          if (same) {
+            words.removeRange(start + block, start + (block * 2));
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    return words.join(' ').trim();
   }
 
   void _sendMessage([String? preset]) {
@@ -376,58 +469,85 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
-    final width = math.min(430.0, math.max(280.0, screen.width - 24));
-    final height = math.min(650.0, math.max(320.0, screen.height - 32));
+    final isPhone = screen.width < 600;
 
-    return ListenableBuilder(
-      listenable: _controller,
-      builder: (context, _) {
-        return Container(
-          width: width,
-          height: height,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: AppColors.pageBackground,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.gold, width: 1.3),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: .24),
-                blurRadius: 32,
-                offset: const Offset(0, 14),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : screen.width;
+        final availableHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : screen.height;
+
+        final width = isPhone
+            ? availableWidth
+            : math.min(430.0, math.max(280.0, availableWidth));
+        final height = isPhone
+            ? availableHeight
+            : math.min(650.0, math.max(320.0, availableHeight));
+
+        return ListenableBuilder(
+          listenable: _controller,
+          builder: (context, _) {
+            return Container(
+              width: width,
+              height: height,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: AppColors.pageBackground,
+                borderRadius: BorderRadius.circular(isPhone ? 0 : 24),
+                border: isPhone
+                    ? null
+                    : Border.all(color: AppColors.gold, width: 1.3),
+                boxShadow: isPhone
+                    ? const []
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: .24),
+                          blurRadius: 32,
+                          offset: const Offset(0, 14),
+                        ),
+                      ],
               ),
-            ],
-          ),
-          child: Column(
-            children: [
-              _buildHeader(),
-              _buildQuickActions(),
-              const Divider(height: 1, color: AppColors.borderLight),
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                  itemCount: _controller.messages.length + (_controller.isLoading ? 1 : 0),
-                  itemBuilder: (_, index) {
-                    if (_controller.isLoading && index == _controller.messages.length) {
-                      return const _TypingIndicator();
-                    }
-                    return _MessageBubble(message: _controller.messages[index]);
-                  },
-                ),
+              child: Column(
+                children: [
+                  _buildHeader(compact: isPhone),
+                  _buildQuickActions(),
+                  const Divider(height: 1, color: AppColors.borderLight),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                      itemCount: _controller.messages.length +
+                          (_controller.isLoading ? 1 : 0),
+                      itemBuilder: (_, index) {
+                        if (_controller.isLoading &&
+                            index == _controller.messages.length) {
+                          return const _TypingIndicator();
+                        }
+                        return _MessageBubble(
+                          message: _controller.messages[index],
+                        );
+                      },
+                    ),
+                  ),
+                  if (_controller.showBookingButton && !_controller.isLoading)
+                    _buildBookingButton(),
+                  if (_isListening) _buildListeningBanner(),
+                  _buildInputArea(),
+                ],
               ),
-              if (_controller.showBookingButton && !_controller.isLoading)
-                _buildBookingButton(),
-              if (_isListening) _buildListeningBanner(),
-              _buildInputArea(),
-            ],
-          ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader({required bool compact}) {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
       decoration: const BoxDecoration(
@@ -477,11 +597,15 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             onPressed: _controller.isLoadingData ? null : _controller.loadSalonData,
             icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20),
           ),
-          if (widget.onMinimize != null)
+          if (!compact && widget.onMinimize != null)
             IconButton(
               tooltip: 'Minimize',
               onPressed: widget.onMinimize,
-              icon: const Icon(Icons.remove_rounded, color: Colors.white, size: 23),
+              icon: const Icon(
+                Icons.remove_rounded,
+                color: Colors.white,
+                size: 23,
+              ),
             ),
           if (widget.onClose != null)
             IconButton(
@@ -1129,6 +1253,7 @@ class FaithCopilotController extends ChangeNotifier {
   final List<KnowledgeDocument> knowledgeDocuments = [];
   
   String? lastSuggestedServiceName;
+  final List<String> _lastMentionedServiceNames = [];
   DateTime? _lastSendAt;
 
   Future<void> loadSalonData() async {
@@ -1338,12 +1463,23 @@ class FaithCopilotController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Image requests are resolved locally from the live Supabase service
+      // records. This prevents the language model from inventing "Image 1",
+      // "Image 2", fake URLs, or descriptions without an actual photo.
+      if (_isImageRequest(cleanText)) {
+        if (services.isEmpty) {
+          await loadSalonData();
+        }
+        final handled = _handleImageRequestLocally(cleanText);
+        if (handled) return;
+      }
+
       final reply = await _fetchAIResponse(cleanText);
       final cleanedReply = _removeRepeatedGreeting(reply);
       _processAIResponse(cleanText, cleanedReply);
     } catch (_) {
       _messages.add(
-        ChatMessage(
+        const ChatMessage(
           text:
               'I could not connect to Faith AI right now. Please try again in a moment.',
           isUser: false,
@@ -1354,6 +1490,217 @@ class FaithCopilotController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  bool _isImageRequest(String text) {
+    final lower = text.toLowerCase();
+    final hasImageWord = lower.contains('image') ||
+        lower.contains('images') ||
+        lower.contains('photo') ||
+        lower.contains('photos') ||
+        lower.contains('picture') ||
+        lower.contains('pictures') ||
+        lower.contains('pic ') ||
+        lower.endsWith(' pic') ||
+        lower.contains('gallery');
+
+    if (!hasImageWord) return false;
+
+    return lower.contains('show') ||
+        lower.contains('see') ||
+        lower.contains('send') ||
+        lower.contains('display') ||
+        lower.contains('look') ||
+        lower.contains('give me') ||
+        lower.contains('want') ||
+        lower.contains('image') ||
+        lower.contains('photo') ||
+        lower.contains('picture');
+  }
+
+  bool _asksForAllImages(String text) {
+    final lower = text.toLowerCase();
+    return _isImageRequest(text) &&
+        (lower.contains('all ') ||
+            lower.contains('all the') ||
+            lower.contains('every ') ||
+            lower.contains('available images') ||
+            lower.contains('available photos'));
+  }
+
+  bool _handleImageRequestLocally(String userText) {
+    if (!_isImageRequest(userText)) return false;
+
+    final candidates = _resolveServicesForImageRequest(userText);
+
+    if (candidates.isEmpty) {
+      final available = services
+          .where((service) =>
+              (service['image_url'] ?? '').toString().trim().isNotEmpty)
+          .toList();
+
+      if (available.isEmpty) {
+        _messages.add(
+          const ChatMessage(
+            text:
+                'There are no salon service photos available in the catalog right now.',
+            isUser: false,
+          ),
+        );
+        return true;
+      }
+
+      if (_asksForAllImages(userText)) {
+        _addImageMessage(
+          available,
+          intro:
+              'Here are the real salon photos currently available in our service catalog.',
+          includeMissingNote: true,
+        );
+        return true;
+      }
+
+      _messages.add(
+        const ChatMessage(
+          text:
+              'Tell me which hairstyle you want to see, or say “show me all the images.”',
+          isUser: false,
+        ),
+      );
+      return true;
+    }
+
+    _addImageMessage(
+      candidates,
+      intro: candidates.length == 1
+          ? 'Here is the real salon photo for ${_serviceName(candidates.first)}.'
+          : 'Here are the real salon photos for the styles we were discussing.',
+      includeMissingNote: true,
+    );
+    return true;
+  }
+
+  void _addImageMessage(
+    List<Map<String, dynamic>> candidateServices, {
+    required String intro,
+    bool includeMissingNote = false,
+  }) {
+    final attachments = <ServiceImageAttachment>[];
+    final missing = <String>[];
+    final seen = <String>{};
+
+    for (final service in candidateServices) {
+      final name = _serviceName(service);
+      final id = (service['id'] ?? '').toString();
+      final key = id.isNotEmpty ? id : name.toLowerCase();
+      if (!seen.add(key)) continue;
+
+      final imageUrl = (service['image_url'] ?? '').toString().trim();
+      if (imageUrl.isEmpty) {
+        missing.add(name);
+        continue;
+      }
+
+      attachments.add(
+        ServiceImageAttachment(
+          serviceName: name,
+          url: imageUrl,
+        ),
+      );
+    }
+
+    var messageText = intro;
+    if (attachments.isEmpty) {
+      messageText = missing.length == 1
+          ? 'I do not have a real salon photo for ${missing.first} in the database yet.'
+          : 'I do not have real salon photos for those styles in the database yet.';
+    } else if (includeMissingNote && missing.isNotEmpty) {
+      messageText +=
+          '\n\nNo real catalog image is stored yet for: ${missing.join(', ')}.';
+    }
+
+    _messages.add(
+      ChatMessage(
+        text: messageText,
+        isUser: false,
+        serviceImages: attachments,
+      ),
+    );
+
+    if (candidateServices.isNotEmpty) {
+      lastSuggestedServiceName = _serviceName(candidateServices.first);
+      _lastMentionedServiceNames
+        ..clear()
+        ..addAll(candidateServices.map(_serviceName).where((name) => name.isNotEmpty));
+    }
+  }
+
+  List<Map<String, dynamic>> _resolveServicesForImageRequest(String userText) {
+    final output = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    void add(Map<String, dynamic> service) {
+      final id = (service['id'] ?? '').toString();
+      final name = _serviceName(service);
+      final key = id.isNotEmpty ? id : name.toLowerCase();
+      if (key.isEmpty || !seen.add(key)) return;
+      output.add(service);
+    }
+
+    // 1. Service explicitly named in the customer's current request.
+    for (final service in _findServicesFromText(userText)) {
+      add(service);
+    }
+
+    // 2. "All images" means the entire live service catalog. Services that
+    // have image_url values are rendered; services without photos are named in
+    // the response so Faith AI never pretends that an image exists.
+    if (_asksForAllImages(userText)) {
+      for (final service in services) {
+        add(service);
+      }
+      return output;
+    }
+
+    // 3. Reuse exact services detected in the previous recommendation.
+    if (output.isEmpty) {
+      for (final rememberedName in _lastMentionedServiceNames) {
+        final service = _findServiceByExactName(rememberedName);
+        if (service != null) add(service);
+      }
+    }
+
+    // 4. Fall back to the last suggested service.
+    if (output.isEmpty && lastSuggestedServiceName != null) {
+      final service = _findServiceByExactName(lastSuggestedServiceName!);
+      if (service != null) add(service);
+    }
+
+    // 5. Resolve from recent conversation text. This handles follow-ups like
+    // "show me the image" after Faith AI previously said "Natural Cornrows".
+    if (output.isEmpty) {
+      for (var i = _messages.length - 2; i >= 0; i--) {
+        for (final service in _findServicesFromText(_messages[i].text)) {
+          add(service);
+        }
+        if (output.isNotEmpty) break;
+      }
+    }
+
+    return output.take(8).toList(growable: false);
+  }
+
+  Map<String, dynamic>? _findServiceByExactName(String name) {
+    final wanted = name.trim().toLowerCase();
+    if (wanted.isEmpty) return null;
+    for (final service in services) {
+      final serviceName = _serviceName(service).toLowerCase();
+      if (serviceName == wanted) return service;
+    }
+    return null;
+  }
+
+  String _serviceName(Map<String, dynamic> service) =>
+      (service['name'] ?? 'Hairstyle').toString().trim();
 
   void addSystemMessage(String text) {
     _messages.add(ChatMessage(text: text, isUser: false));
@@ -1386,67 +1733,158 @@ class FaithCopilotController extends ChangeNotifier {
   }
 
   void _processAIResponse(String userText, String aiText) {
-    final detectedServices = _findServicesFromText(aiText);
+    final detectedServices = <Map<String, dynamic>>[];
+    final seen = <String>{};
 
-    if (detectedServices.isEmpty) {
-      detectedServices.addAll(_findServicesFromText(userText));
+    void addService(Map<String, dynamic> service) {
+      final id = (service['id'] ?? '').toString();
+      final name = _serviceName(service);
+      final key = id.isNotEmpty ? id : name.toLowerCase();
+      if (key.isEmpty || !seen.add(key)) return;
+      detectedServices.add(service);
     }
 
-    // If the customer asks for a recommendation but the model does not repeat
-    // exact service names, use the embedding index to select real catalog
-    // services so the response can still show real salon photos.
+    // Preferred path: hidden exact-service markers requested from the model.
+    for (final service in _servicesFromMarkers(aiText)) {
+      addService(service);
+    }
+
+    // Backward-compatible path: detect exact names/known aliases in reply.
+    for (final service in _findServicesFromText(aiText)) {
+      addService(service);
+    }
+
+    // Also inspect the user's request.
+    if (detectedServices.isEmpty) {
+      for (final service in _findServicesFromText(userText)) {
+        addService(service);
+      }
+    }
+
+    // Recommendation fallback: retrieve only real Supabase service records.
     if (detectedServices.isEmpty && _looksLikeStyleRequest(userText)) {
-      final seen = <String>{};
       for (final doc in retrieveKnowledge(userText, limit: 12)) {
         if (doc.source != KnowledgeSource.service) continue;
-        final serviceId = doc.serviceId ?? '';
-        for (final service in services) {
-          final id = (service['id'] ?? '').toString();
-          final name = (service['name'] ?? '').toString().trim();
-          if ((serviceId.isNotEmpty && id == serviceId) ||
-              (doc.serviceName != null && name == doc.serviceName)) {
-            final key = id.isNotEmpty ? id : name.toLowerCase();
-            if (seen.add(key)) detectedServices.add(service);
-            break;
-          }
-        }
+        final service = _serviceFromKnowledgeDocument(doc);
+        if (service != null) addService(service);
         if (detectedServices.length >= 3) break;
       }
     }
 
     final imageAttachments = detectedServices
         .map((service) {
-          final name = (service['name'] ?? 'Hairstyle').toString().trim();
+          final name = _serviceName(service);
           final imageUrl = (service['image_url'] ?? '').toString().trim();
-
           if (imageUrl.isEmpty) return null;
-
-          return ServiceImageAttachment(
-            serviceName: name,
-            url: imageUrl,
-          );
+          return ServiceImageAttachment(serviceName: name, url: imageUrl);
         })
         .whereType<ServiceImageAttachment>()
         .take(3)
         .toList(growable: false);
 
+    final visibleText = _sanitizeAIReply(aiText);
+
     _messages.add(
       ChatMessage(
-        text: aiText,
+        text: visibleText,
         isUser: false,
         serviceImages: imageAttachments,
       ),
     );
 
     if (detectedServices.isNotEmpty) {
-      lastSuggestedServiceName =
-          detectedServices.first['name']?.toString();
+      lastSuggestedServiceName = _serviceName(detectedServices.first);
+      _lastMentionedServiceNames
+        ..clear()
+        ..addAll(
+          detectedServices
+              .map(_serviceName)
+              .where((name) => name.isNotEmpty),
+        );
     }
 
-    final lowerReply = aiText.toLowerCase();
-    if (_isBookingIntent(aiText) || lowerReply.contains('open booking')) {
+    final lowerReply = visibleText.toLowerCase();
+    if (_isBookingIntent(visibleText) ||
+        lowerReply.contains('open booking')) {
       _showBookingButton = true;
     }
+  }
+
+  Map<String, dynamic>? _serviceFromKnowledgeDocument(
+    KnowledgeDocument doc,
+  ) {
+    for (final service in services) {
+      final id = (service['id'] ?? '').toString();
+      final name = _serviceName(service);
+      if ((doc.serviceId != null &&
+              doc.serviceId!.isNotEmpty &&
+              id == doc.serviceId) ||
+          (doc.serviceName != null &&
+              name.toLowerCase() == doc.serviceName!.toLowerCase())) {
+        return service;
+      }
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _servicesFromMarkers(String text) {
+    final output = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    final marker = RegExp(
+      r'\[\[service\s*:\s*([^\]]+)\]\]',
+      caseSensitive: false,
+    );
+
+    for (final match in marker.allMatches(text)) {
+      final requestedName = (match.group(1) ?? '').trim();
+      if (requestedName.isEmpty) continue;
+
+      Map<String, dynamic>? service = _findServiceByExactName(requestedName);
+      service ??= _findServiceFromText(requestedName);
+      if (service == null) continue;
+
+      final id = (service['id'] ?? '').toString();
+      final name = _serviceName(service);
+      final key = id.isNotEmpty ? id : name.toLowerCase();
+      if (key.isNotEmpty && seen.add(key)) output.add(service);
+    }
+
+    return output;
+  }
+
+  String _sanitizeAIReply(String text) {
+    var cleaned = text;
+
+    // Hidden service markers are for the app, not the customer.
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\[\[service\s*:\s*[^\]]+\]\]', caseSensitive: false),
+      '',
+    );
+
+    // Remove model-generated placeholder image descriptions. Real images are
+    // rendered only from services.image_url.
+    cleaned = cleaned.replaceAll(
+      RegExp(
+        r'(?im)^\s*(?:[-*]\s*)?image\s*\d+\s*[:.\-]\s*.*$',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    cleaned = cleaned.replaceAll(
+      RegExp(
+        r'(?im)^\s*(?:[-*]\s*)?(?:photo|picture)\s*\d+\s*[:.\-]\s*.*$',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    cleaned = cleaned.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+
+    if (cleaned.isEmpty) {
+      return 'I found the matching salon style. The app will show the real catalog photo when one is available.';
+    }
+    return cleaned;
   }
 
   Future<String> _fetchAIResponse(String customerMessage) async {
@@ -1568,98 +2006,92 @@ class FaithCopilotController extends ChangeNotifier {
   }
 
   List<Map<String, dynamic>> _findServicesFromText(String text) {
-    final lower = text.toLowerCase();
+    final lower = _normalizeServiceLookup(text);
     final matches = <Map<String, dynamic>>[];
     final seen = <String>{};
 
     void addService(Map<String, dynamic> service) {
-      final key = service['id']?.toString() ??
-          service['name']?.toString().toLowerCase() ??
-          '';
-
-      if (key.isEmpty || seen.contains(key)) return;
-      seen.add(key);
+      final id = (service['id'] ?? '').toString();
+      final name = _serviceName(service);
+      final key = id.isNotEmpty ? id : name.toLowerCase();
+      if (key.isEmpty || !seen.add(key)) return;
       matches.add(service);
     }
 
-    for (final service in services) {
-      final name =
-          service['name']?.toString().trim().toLowerCase() ?? '';
+    // Exact live service names always win.
+    final orderedServices = [...services]
+      ..sort((a, b) =>
+          _serviceName(b).length.compareTo(_serviceName(a).length));
+
+    for (final service in orderedServices) {
+      final name = _normalizeServiceLookup(_serviceName(service));
       if (name.isNotEmpty && lower.contains(name)) {
         addService(service);
       }
     }
 
-    const aliases = <String, List<String>>{
-      'knotless': ['knotless'],
-      'fulani': ['fulani'],
-      'lemonade': ['lemonade'],
-      'senegalese': ['senegalese'],
-      'passion': ['passion twist', 'passion twists'],
-      'box braid': ['box braid', 'box braids'],
-      'twist': ['twist', 'twists'],
-      'cornrow': ['cornrow', 'cornrows'],
-      'boho': ['boho'],
-      'spring': ['spring twist', 'spring'],
-      'kids': ['kids', 'kid', 'child'],
-      'loc': ['loc', 'locs'],
+    // Friendly aliases mapped to actual live service names. These mappings do
+    // not create new services; they only resolve customer wording.
+    final aliases = <String, List<String>>{
+      'Cornrows': [
+        'cornrow',
+        'cornrows',
+        'natural cornrow',
+        'natural cornrows',
+      ],
+      'Extra small knotless with coil': [
+        'extra small knotless with coil',
+        'extra small knotless coil',
+        'small knotless with coil',
+      ],
+      'Fulani Braids': ['fulani', 'fulani braid', 'fulani braids'],
+      'Kids Styling': [
+        'kids styling',
+        'kid styling',
+        'children styling',
+        'child styling',
+        'kids hair',
+      ],
+      'Pony tail': ['pony tail', 'ponytail'],
+      'Box Braids': ['box braid', 'box braids'],
+      'Feed-In Braids': [
+        'feed in braid',
+        'feed in braids',
+        'feed-in braid',
+        'feed-in braids',
+      ],
+      'Goddess Braids': ['goddess braid', 'goddess braids'],
+      'Knotless Braids': ['knotless braid', 'knotless braids', 'knotless'],
+      'Lemonade Braids': ['lemonade braid', 'lemonade braids', 'lemonade'],
+      'Passion Twists': ['passion twist', 'passion twists'],
+      'Twists': ['natural twist', 'natural twists', 'twist', 'twists'],
     };
 
     for (final entry in aliases.entries) {
-      if (!entry.value.any(lower.contains)) continue;
+      final aliasMatched = entry.value
+          .map(_normalizeServiceLookup)
+          .any((alias) => alias.isNotEmpty && lower.contains(alias));
+      if (!aliasMatched) continue;
 
-      for (final service in services) {
-        final name =
-            service['name']?.toString().trim().toLowerCase() ?? '';
-        final category =
-            service['category']?.toString().trim().toLowerCase() ?? '';
-
-        if (name.contains(entry.key) || category.contains(entry.key)) {
-          addService(service);
-        }
-      }
+      final exactService = _findServiceByExactName(entry.key);
+      if (exactService != null) addService(exactService);
     }
 
-    return matches.take(3).toList(growable: false);
+    return matches.take(8).toList(growable: false);
+  }
+
+  String _normalizeServiceLookup(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('&', ' and ')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   Map<String, dynamic>? _findServiceFromText(String text) {
-    final lower = text.toLowerCase();
-
-    for (final service in services) {
-      final name = service['name']?.toString().trim().toLowerCase() ?? '';
-      if (name.isNotEmpty && lower.contains(name)) return service;
-    }
-
-    const aliases = <String, List<String>>{
-      'knotless': ['knotless'],
-      'fulani': ['fulani'],
-      'lemonade': ['lemonade'],
-      'senegalese': ['senegalese'],
-      'twist': ['twist', 'twists'],
-      'cornrow': ['cornrow', 'cornrows'],
-      'boho': ['boho'],
-      'spring': ['spring twist', 'spring'],
-      'kids': ['kids', 'kid', 'child'],
-      'loc': ['loc', 'locs'],
-    };
-
-    for (final entry in aliases.entries) {
-      if (!entry.value.any(lower.contains)) continue;
-
-      for (final service in services) {
-        final name =
-            service['name']?.toString().trim().toLowerCase() ?? '';
-        final category =
-            service['category']?.toString().trim().toLowerCase() ?? '';
-
-        if (name.contains(entry.key) || category.contains(entry.key)) {
-          return service;
-        }
-      }
-    }
-
-    return null;
+    final matches = _findServicesFromText(text);
+    return matches.isEmpty ? null : matches.first;
   }
 
 }
@@ -2012,9 +2444,20 @@ STRICT RULES
 - RETRIEVED LIVE KNOWLEDGE comes from Faith Hair Style's customer-facing pages
   and live Supabase records. Treat it as the source of truth.
 - Recommend ONLY service names that appear in the retrieved/live catalog data.
+- NEVER combine a category with a service name to create a new name. Example:
+  if the live record is service "Cornrows" and category "Natural", say "Cornrows",
+  not "Natural Cornrows".
+- Whenever you recommend or discuss a specific service, write its EXACT live
+  service name and append this hidden marker immediately after the name:
+  [[service:EXACT SERVICE NAME]]
 - For style recommendations, prefer 1 to 3 exact service names so the app can
   automatically attach their REAL Supabase service images.
 - Never invent a style image or image URL. Do not output Markdown image syntax.
+- Never write placeholder descriptions such as "Image 1", "Image 2", "Photo 1",
+  or describe an image you have not actually received.
+- If the customer asks to see a photo/image/picture, mention the exact service
+  name only; the app itself will render services.image_url when that record has
+  a real image.
 - Always say "starting at" for service prices.
 - Never invent price, duration, discount, deposit, policy, payment method,
   hair color, or appointment availability.
