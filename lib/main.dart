@@ -10,6 +10,9 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import 'ai_chat_page.dart' as faith_chat;
+
+final faithNavigatorKey = GlobalKey<NavigatorState>();
 
 const supabaseUrl = 'https://lowqtmndtkgwmnyhqszp.supabase.co';
 const supabaseAnonKey =
@@ -128,6 +131,7 @@ class FaithHairApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: faithNavigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Faith Hair Style',
       theme: ThemeData(
@@ -379,7 +383,9 @@ class _MainPageState extends State<MainPage> {
   Widget build(BuildContext context) {
     final wideScreen = MediaQuery.sizeOf(context).width >= 950;
 
-    return Stack(
+    return faith_chat.FaithAICopilotShell(
+      navigatorKey: faithNavigatorKey,
+      child: Stack(
       children: [
         Positioned.fill(
           child: Scaffold(
@@ -425,11 +431,8 @@ class _MainPageState extends State<MainPage> {
             ),
           ),
         ),
-        FaithAICopilotFloating(
-          onBook: goToBooking,
-          bottomOffset: wideScreen ? 18 : 92,
-        ),
       ],
+      ),
     );
   }
 }
@@ -1882,20 +1885,7 @@ class AiPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const BusinessAppBar(title: 'Faith AI Copilot'),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: FaithAICopilotPanel(
-              onBook: onBook,
-              fullPage: true,
-            ),
-          ),
-        ),
-      ),
-    );
+    return faith_chat.AIChatPage(navigatorKey: faithNavigatorKey);
   }
 }
 
@@ -2505,13 +2495,17 @@ class _FaithAICopilotFloatingState extends State<FaithAICopilotFloating> {
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
-    final panelWidth = min(430.0, max(300.0, screen.width - 24));
-    final panelHeight = min(650.0, max(460.0, screen.height - 120));
+    final media = MediaQuery.of(context);
+    final panelWidth = min(430.0, max(0.0,
+        screen.width - media.padding.horizontal - 24));
+    final panelHeight = min(650.0, max(0.0,
+        screen.height - media.padding.vertical - media.viewInsets.bottom -
+        widget.bottomOffset - 12));
     final showPanel = open && !minimized;
 
     return Positioned(
       right: 12,
-      bottom: widget.bottomOffset,
+      bottom: widget.bottomOffset + media.viewInsets.bottom,
       child: SafeArea(
         child: Material(
           color: Colors.transparent,
@@ -2654,6 +2648,8 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   bool isListening = false;
   bool speakReplies = true;
   bool isSpeaking = false;
+  int _voiceRequestId = 0;
+  bool _startingMicrophone = false;
 
   @override
   void initState() {
@@ -2671,6 +2667,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
 
   @override
   void dispose() {
+    _voiceRequestId++;
     controller.removeListener(_onControllerChanged);
     controller.dispose();
     speech.stop();
@@ -2682,9 +2679,10 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   }
 
   void _scrollToBottom() {
-    if (!scrollController.hasClients) return;
+    if (!mounted || !scrollController.hasClients) return;
+    if (!scrollController.position.hasContentDimensions) return;
     scrollController.animateTo(
-      scrollController.position.maxScrollExtent + 160,
+      scrollController.position.maxScrollExtent,
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOut,
     );
@@ -2716,13 +2714,15 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   }
 
   Future<void> _speakText(String text) async {
-    if (!speakReplies) return;
+    if (!mounted || !speakReplies) return;
 
     final spokenText = _plainSpeechText(text);
     if (spokenText.isEmpty) return;
+    final requestId = ++_voiceRequestId;
 
     try {
       await neuralVoicePlayer.stop();
+      if (!mounted || requestId != _voiceRequestId || !speakReplies) return;
 
       if (mounted) {
         setState(() => isSpeaking = true);
@@ -2752,9 +2752,10 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
         throw Exception('Voice server returned empty audio');
       }
 
+      if (!mounted || requestId != _voiceRequestId || !speakReplies) return;
       await neuralVoicePlayer.play(BytesSource(response.bodyBytes));
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || requestId != _voiceRequestId) return;
       setState(() => isSpeaking = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2768,6 +2769,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   }
 
   Future<void> _stopSpeaking() async {
+    _voiceRequestId++;
     await neuralVoicePlayer.stop();
     if (!mounted) return;
     setState(() => isSpeaking = false);
@@ -2805,7 +2807,10 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   }
 
   Future<void> _toggleVoiceInput() async {
-    if (controller.aiThinking) return;
+    if (!mounted || controller.aiThinking || _startingMicrophone) return;
+
+    _startingMicrophone = true;
+    try {
 
     if (isListening) {
       await speech.stop();
@@ -2814,6 +2819,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     }
 
     await _initializeSpeech();
+    if (!mounted) return;
 
     if (!speechReady) {
       if (!mounted) return;
@@ -2847,9 +2853,21 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
         }
       },
     );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => isListening = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+          'Could not start the microphone. Check browser permissions and try again.',
+        )),
+      );
+    } finally {
+      _startingMicrophone = false;
+    }
   }
 
   Future<void> _send([String? preset]) async {
+    if (!mounted) return;
     final text = (preset ?? input.text).trim();
     if (text.isEmpty || controller.aiThinking) return;
 
@@ -2862,10 +2880,12 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       await _stopSpeaking();
     }
 
+    if (!mounted) return;
     if (preset == null) input.clear();
 
     final messageCountBefore = controller.messages.length;
     final accepted = await controller.send(text);
+    if (!mounted) return;
 
     if (!accepted && preset == null && mounted) {
       input.text = text;
@@ -3254,6 +3274,20 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   @override
   Widget build(BuildContext context) {
     final child = _buildCopilotBody();
+    // Keep the Expanded message list bounded, including on short viewports.
+    final boundedChild = LayoutBuilder(
+      builder: (context, constraints) {
+        final availableHeight = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : min(650.0, MediaQuery.sizeOf(context).height);
+        return SingleChildScrollView(
+          child: SizedBox(
+            height: max(460.0, availableHeight),
+            child: child,
+          ),
+        );
+      },
+    );
     if (widget.fullPage) {
       return Container(
         constraints: const BoxConstraints(maxWidth: 900),
@@ -3263,7 +3297,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: kBorder),
         ),
-        child: child,
+        child: boundedChild,
       );
     }
 
@@ -3281,7 +3315,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
           ),
         ],
       ),
-      child: child,
+      child: boundedChild,
     );
   }
 }
@@ -6094,3 +6128,5 @@ String formatPrice(dynamic value) {
 
   return text;
 }
+
+
