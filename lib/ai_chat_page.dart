@@ -1865,16 +1865,18 @@ class FaithCopilotController extends ChangeNotifier {
     // rendered only from services.image_url.
     cleaned = cleaned.replaceAll(
       RegExp(
-        r'(?im)^\s*(?:[-*]\s*)?image\s*\d+\s*[:.\-]\s*.*$',
+        r'^\s*(?:[-*]\s*)?image\s*\d+\s*[:.\-]\s*.*$',
         caseSensitive: false,
+        multiLine: true,
       ),
       '',
     );
 
     cleaned = cleaned.replaceAll(
       RegExp(
-        r'(?im)^\s*(?:[-*]\s*)?(?:photo|picture)\s*\d+\s*[:.\-]\s*.*$',
+        r'^\s*(?:[-*]\s*)?(?:photo|picture)\s*\d+\s*[:.\-]\s*.*$',
         caseSensitive: false,
+        multiLine: true,
       ),
       '',
     );
