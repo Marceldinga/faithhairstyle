@@ -12,31 +12,14 @@ import 'booking_page.dart';
 
 // ============================================================
 // FAITH AI / FAITHI COPILOT
-// ============================================================
+// Current frontend for Faithi backend v4.4+
 //
-// Frontend responsibilities:
-// - Chat UI
-// - Voice input
-// - Voice output
-// - Load public salon catalog for UI/booking
-// - Display REAL Supabase service images
-// - Display structured results returned by Faithi backend
-// - Open BookingPage with the actual service record
-//
-// Backend responsibilities:
-// - Intent detection
-// - Database-grounded retrieval / RAG
-// - LLM reasoning
-// - Colors
-// - Services
-// - Prices
-// - Recommendations
-// - Availability
-// - Verification / hallucination protection
-//
-// IMPORTANT:
-// Flutter does NOT send the entire database inside the user message.
-// The backend is the primary reasoning engine.
+// - Uses current Railway production endpoint
+// - Voice input + TTS output
+// - Live Supabase services/colors for UI + booking
+// - Backend remains primary RAG/reasoning engine
+// - Displays real service images returned/matched from Supabase
+// - Preserves conversation history and customer preferences
 // ============================================================
 
 // ============================================================
@@ -54,24 +37,19 @@ class FaithAICopilotShell extends StatefulWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
-  State<FaithAICopilotShell> createState() =>
-      _FaithAICopilotShellState();
+  State<FaithAICopilotShell> createState() => _FaithAICopilotShellState();
 }
 
-class _FaithAICopilotShellState
-    extends State<FaithAICopilotShell> {
+class _FaithAICopilotShellState extends State<FaithAICopilotShell> {
   bool _isOpen = false;
 
-  void _toggleChat() {
-    setState(() => _isOpen = !_isOpen);
-  }
+  void _toggleChat() => setState(() => _isOpen = !_isOpen);
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
         widget.child,
-
         Positioned(
           right: 16,
           bottom: 16,
@@ -88,10 +66,7 @@ class _FaithAICopilotShellState
                       curve: Curves.easeOutBack,
                     ),
                     alignment: Alignment.bottomRight,
-                    child: FadeTransition(
-                      opacity: animation,
-                      child: child,
-                    ),
+                    child: FadeTransition(opacity: animation, child: child),
                   );
                 },
                 child: _isOpen
@@ -104,9 +79,7 @@ class _FaithAICopilotShellState
                     : _CopilotLauncher(
                         key: const ValueKey('launcher'),
                         hasActiveChat:
-                            FaithCopilotController
-                                .instance
-                                .hasChatHistory,
+                            FaithCopilotController.instance.hasChatHistory,
                         onTap: _toggleChat,
                       ),
               ),
@@ -139,22 +112,13 @@ class _CopilotLauncher extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       child: Container(
         constraints: const BoxConstraints(minHeight: 58),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 10,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [
-              AppColors.navy,
-              AppColors.royalBlue,
-            ],
+            colors: [AppColors.navy, AppColors.royalBlue],
           ),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: AppColors.gold,
-            width: 1.4,
-          ),
+          border: Border.all(color: AppColors.gold, width: 1.4),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: .20),
@@ -181,8 +145,7 @@ class _CopilotLauncher extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
@@ -194,9 +157,7 @@ class _CopilotLauncher extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  hasActiveChat
-                      ? 'Continue your chat'
-                      : 'Ask your salon copilot',
+                  hasActiveChat ? 'Continue your chat' : 'Ask your salon copilot',
                   style: const TextStyle(
                     color: Color(0xFFFFD761),
                     fontSize: 10.5,
@@ -217,10 +178,7 @@ class _CopilotLauncher extends StatelessWidget {
 // ============================================================
 
 class AIChatPage extends StatelessWidget {
-  const AIChatPage({
-    super.key,
-    this.navigatorKey,
-  });
+  const AIChatPage({super.key, this.navigatorKey});
 
   final GlobalKey<NavigatorState>? navigatorKey;
 
@@ -235,9 +193,7 @@ class AIChatPage extends StatelessWidget {
       ),
       body: SafeArea(
         child: Center(
-          child: FaithAICopilotPanel(
-            navigatorKey: navigatorKey,
-          ),
+          child: FaithAICopilotPanel(navigatorKey: navigatorKey),
         ),
       ),
     );
@@ -261,22 +217,14 @@ class FaithAICopilotPanel extends StatefulWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
-  State<FaithAICopilotPanel> createState() =>
-      _FaithAICopilotPanelState();
+  State<FaithAICopilotPanel> createState() => _FaithAICopilotPanelState();
 }
 
-class _FaithAICopilotPanelState
-    extends State<FaithAICopilotPanel> {
-  final TextEditingController _textController =
-      TextEditingController();
-
-  final ScrollController _scrollController =
-      ScrollController();
-
+class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
+  final TextEditingController _textController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   late final FaithCopilotController _controller;
-
-  final stt.SpeechToText _speech =
-      stt.SpeechToText();
+  final stt.SpeechToText _speech = stt.SpeechToText();
 
   bool _speechReady = false;
   bool _isListening = false;
@@ -285,12 +233,8 @@ class _FaithAICopilotPanelState
   @override
   void initState() {
     super.initState();
-
-    _controller =
-        FaithCopilotController.instance;
-
+    _controller = FaithCopilotController.instance;
     _controller.addListener(_onControllerChanged);
-
     _initializeSpeech();
 
     if (_controller.services.isEmpty) {
@@ -302,62 +246,37 @@ class _FaithAICopilotPanelState
 
   @override
   void dispose() {
-    _controller.removeListener(
-      _onControllerChanged,
-    );
-
+    _controller.removeListener(_onControllerChanged);
     _speech.stop();
     _textController.dispose();
     _scrollController.dispose();
-
     super.dispose();
   }
 
-  void _onControllerChanged() {
-    _scrollToBottom();
-  }
+  void _onControllerChanged() => _scrollToBottom();
 
   void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) {
-        if (!_scrollController.hasClients) {
-          return;
-        }
-
-        _scrollController.animateTo(
-          _scrollController
-                  .position
-                  .maxScrollExtent +
-              400,
-          duration:
-              const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      },
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent + 400,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
   }
-
-  // ==========================================================
-  // VOICE INPUT
-  // ==========================================================
 
   Future<void> _initializeSpeech() async {
     try {
-      final available =
-          await _speech.initialize(
+      final available = await _speech.initialize(
         onStatus: (status) {
           if (!mounted) return;
-
-          if (status == 'done' ||
-              status == 'notListening') {
-            setState(
-              () => _isListening = false,
-            );
+          if (status == 'done' || status == 'notListening') {
+            setState(() => _isListening = false);
           }
         },
         onError: (error) {
           if (!mounted) return;
-
           setState(() {
             _isListening = false;
             _speechError = error.errorMsg;
@@ -366,21 +285,15 @@ class _FaithAICopilotPanelState
       );
 
       if (!mounted) return;
-
       setState(() {
         _speechReady = available;
-
-        _speechError = available
-            ? null
-            : 'Voice input is not available.';
+        _speechError = available ? null : 'Voice input is not available.';
       });
     } catch (_) {
       if (!mounted) return;
-
       setState(() {
         _speechReady = false;
-        _speechError =
-            'Voice input could not be initialized.';
+        _speechError = 'Voice input could not be initialized.';
       });
     }
   }
@@ -390,35 +303,20 @@ class _FaithAICopilotPanelState
 
     if (_isListening) {
       await _speech.stop();
-
       if (!mounted) return;
-
-      setState(
-        () => _isListening = false,
-      );
-
+      setState(() => _isListening = false);
       return;
     }
 
-    // Stop Faithi speaking before listening.
     await _controller.stopSpeaking();
 
     if (!_speechReady) {
       await _initializeSpeech();
-
       if (!_speechReady) {
         if (!mounted) return;
-
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
-          SnackBar(
-            content: Text(
-              _speechError ??
-                  'Microphone unavailable.',
-            ),
-          ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_speechError ?? 'Microphone unavailable.')),
         );
-
         return;
       }
     }
@@ -434,100 +332,55 @@ class _FaithAICopilotPanelState
       cancelOnError: true,
       onResult: (result) {
         if (!mounted) return;
-
-        final raw =
-            result.recognizedWords.trim();
-
-        final words =
-            _removeDuplicatedSpeech(raw);
+        final words = _removeDuplicatedSpeech(result.recognizedWords.trim());
 
         if (words.isNotEmpty) {
-          _textController.value =
-              TextEditingValue(
+          _textController.value = TextEditingValue(
             text: words,
-            selection:
-                TextSelection.collapsed(
-              offset: words.length,
-            ),
+            selection: TextSelection.collapsed(offset: words.length),
           );
         }
 
         if (result.finalResult) {
-          setState(
-            () => _isListening = false,
-          );
+          setState(() => _isListening = false);
         }
       },
     );
   }
 
-  String _removeDuplicatedSpeech(
-    String input,
-  ) {
+  String _removeDuplicatedSpeech(String input) {
     if (input.length < 2) return input;
-
     if (input.length.isEven) {
       final half = input.length ~/ 2;
-
-      final first =
-          input.substring(0, half);
-
-      final second =
-          input.substring(half);
-
-      if (first.toLowerCase() ==
-          second.toLowerCase()) {
-        return first;
-      }
+      final first = input.substring(0, half);
+      final second = input.substring(half);
+      if (first.toLowerCase() == second.toLowerCase()) return first;
     }
-
     return input;
   }
 
-  // ==========================================================
-  // SEND
-  // ==========================================================
-
   void _sendMessage([String? preset]) {
-    final text =
-        (preset ?? _textController.text)
-            .trim();
-
-    if (text.isEmpty ||
-        _controller.isLoading) {
-      return;
-    }
-
+    final text = (preset ?? _textController.text).trim();
+    if (text.isEmpty || _controller.isLoading) return;
     _textController.clear();
-
     _controller.sendMessage(text);
   }
 
-  // ==========================================================
-  // BOOKING
-  // ==========================================================
-
   Future<void> _openBooking() async {
-    final service =
-        _controller.getSuggestedService();
+    final service = _controller.getSuggestedService();
 
     if (service == null) {
       _controller.addSystemMessage(
-        'Tell me which hairstyle you want first. '
-        'I can also recommend one for you.',
+        'Tell me which hairstyle you want first. I can also recommend one for you.',
       );
-
       return;
     }
 
     final route = MaterialPageRoute(
-      builder: (_) =>
-          BookingPage(service: service),
+      builder: (_) => BookingPage(service: service),
     );
 
-    final globalNavigator =
-        widget.navigatorKey?.currentState;
-
+    final globalNavigator = widget.navigatorKey?.currentState;
     if (globalNavigator != null) {
       await globalNavigator.push(route);
     } else if (mounted) {
@@ -535,30 +388,11 @@ class _FaithAICopilotPanelState
     }
   }
 
-  // ==========================================================
-  // BUILD
-  // ==========================================================
-
   @override
   Widget build(BuildContext context) {
-    final screen =
-        MediaQuery.sizeOf(context);
-
-    final width = math.min(
-      430.0,
-      math.max(
-        280.0,
-        screen.width - 24,
-      ),
-    );
-
-    final height = math.min(
-      650.0,
-      math.max(
-        320.0,
-        screen.height - 32,
-      ),
-    );
+    final screen = MediaQuery.sizeOf(context);
+    final width = math.min(430.0, math.max(280.0, screen.width - 24));
+    final height = math.min(650.0, math.max(320.0, screen.height - 32));
 
     return ListenableBuilder(
       listenable: _controller,
@@ -569,19 +403,13 @@ class _FaithAICopilotPanelState
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: AppColors.pageBackground,
-            borderRadius:
-                BorderRadius.circular(24),
-            border: Border.all(
-              color: AppColors.gold,
-              width: 1.3,
-            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.gold, width: 1.3),
             boxShadow: [
               BoxShadow(
-                color: Colors.black
-                    .withValues(alpha: .24),
+                color: Colors.black.withValues(alpha: .24),
                 blurRadius: 32,
-                offset:
-                    const Offset(0, 14),
+                offset: const Offset(0, 14),
               ),
             ],
           ),
@@ -589,55 +417,25 @@ class _FaithAICopilotPanelState
             children: [
               _buildHeader(),
               _buildQuickActions(),
-
-              const Divider(
-                height: 1,
-                color: AppColors.borderLight,
-              ),
-
+              const Divider(height: 1, color: AppColors.borderLight),
               Expanded(
                 child: ListView.builder(
-                  controller:
-                      _scrollController,
-                  padding:
-                      const EdgeInsets.fromLTRB(
-                    12,
-                    10,
-                    12,
-                    12,
-                  ),
-                  itemCount:
-                      _controller.messages.length +
-                          (_controller.isLoading
-                              ? 1
-                              : 0),
-                  itemBuilder:
-                      (context, index) {
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                  itemCount: _controller.messages.length +
+                      (_controller.isLoading ? 1 : 0),
+                  itemBuilder: (context, index) {
                     if (_controller.isLoading &&
-                        index ==
-                            _controller
-                                .messages
-                                .length) {
+                        index == _controller.messages.length) {
                       return const _TypingIndicator();
                     }
-
-                    return _MessageBubble(
-                      message:
-                          _controller.messages[
-                              index],
-                    );
+                    return _MessageBubble(message: _controller.messages[index]);
                   },
                 ),
               ),
-
-              if (_controller
-                      .showBookingButton &&
-                  !_controller.isLoading)
+              if (_controller.showBookingButton && !_controller.isLoading)
                 _buildBookingButton(),
-
-              if (_isListening)
-                _buildListeningBanner(),
-
+              if (_isListening) _buildListeningBanner(),
               _buildInputArea(),
             ],
           ),
@@ -646,19 +444,9 @@ class _FaithAICopilotPanelState
     );
   }
 
-  // ==========================================================
-  // HEADER
-  // ==========================================================
-
   Widget _buildHeader() {
     return Container(
-      padding:
-          const EdgeInsets.fromLTRB(
-        14,
-        12,
-        8,
-        12,
-      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -673,8 +461,7 @@ class _FaithAICopilotPanelState
           Container(
             width: 40,
             height: 40,
-            decoration:
-                const BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.gold,
               shape: BoxShape.circle,
             ),
@@ -684,21 +471,17 @@ class _FaithAICopilotPanelState
               size: 21,
             ),
           ),
-
           const SizedBox(width: 10),
-
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'FAITHI AI COPILOT',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                     letterSpacing: .7,
                   ),
                 ),
@@ -707,28 +490,20 @@ class _FaithAICopilotPanelState
                       ? 'Loading live salon info...'
                       : 'Styles • prices • colors • availability',
                   maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color:
-                        Color(0xFFFFD761),
+                    color: Color(0xFFFFD761),
                     fontSize: 10.5,
-                    fontWeight:
-                        FontWeight.w700,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
           ),
-
-          // Voice output toggle
           IconButton(
             tooltip:
-                _controller.voiceEnabled
-                    ? 'Turn voice off'
-                    : 'Turn voice on',
-            onPressed:
-                _controller.toggleVoice,
+                _controller.voiceEnabled ? 'Turn voice off' : 'Turn voice on',
+            onPressed: _controller.toggleVoice,
             icon: Icon(
               _controller.voiceEnabled
                   ? Icons.volume_up_rounded
@@ -739,33 +514,26 @@ class _FaithAICopilotPanelState
               size: 21,
             ),
           ),
-
           IconButton(
             tooltip: 'Refresh salon data',
             onPressed:
-                _controller.isLoadingData
-                    ? null
-                    : _controller
-                        .loadSalonData,
+                _controller.isLoadingData ? null : _controller.loadSalonData,
             icon: const Icon(
               Icons.refresh_rounded,
               color: Colors.white70,
               size: 20,
             ),
           ),
-
           if (widget.onMinimize != null)
             IconButton(
               tooltip: 'Minimize',
-              onPressed:
-                  widget.onMinimize,
+              onPressed: widget.onMinimize,
               icon: const Icon(
                 Icons.remove_rounded,
                 color: Colors.white,
                 size: 23,
               ),
             ),
-
           if (widget.onClose != null)
             IconButton(
               tooltip: 'Close',
@@ -781,124 +549,71 @@ class _FaithAICopilotPanelState
     );
   }
 
-  // ==========================================================
-  // QUICK ACTIONS
-  // ==========================================================
-
   Widget _buildQuickActions() {
     return Container(
       height: 48,
-      padding:
-          const EdgeInsets.symmetric(
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: ListView(
-        scrollDirection:
-            Axis.horizontal,
-        padding:
-            const EdgeInsets.symmetric(
-          horizontal: 10,
-        ),
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         children: [
           _QuickChip(
             label: 'Choose for me',
-            icon:
-                Icons.auto_awesome_rounded,
+            icon: Icons.auto_awesome_rounded,
             onTap: () => _sendMessage(
               'Recommend a hairstyle for me using the live Faith Hairstyle services.',
             ),
-            isLoading:
-                _controller.isLoading,
+            isLoading: _controller.isLoading,
           ),
-
           const SizedBox(width: 7),
-
           _QuickChip(
             label: 'Under my budget',
             icon: Icons.savings_outlined,
-            onTap: () => _sendMessage(
-              'Help me find a hairstyle within my budget.',
-            ),
-            isLoading:
-                _controller.isLoading,
+            onTap: () =>
+                _sendMessage('Help me find a hairstyle within my budget.'),
+            isLoading: _controller.isLoading,
           ),
-
           const SizedBox(width: 7),
-
           _QuickChip(
             label: 'Colors',
             icon: Icons.palette_outlined,
-            onTap: () => _sendMessage(
-              'Show me the available hair colors.',
-            ),
-            isLoading:
-                _controller.isLoading,
+            onTap: () => _sendMessage('Show me the available hair colors.'),
+            isLoading: _controller.isLoading,
           ),
-
           const SizedBox(width: 7),
-
           _QuickChip(
             label: 'Open times',
-            icon:
-                Icons.schedule_rounded,
-            onTap: () => _sendMessage(
-              'Show me the next available appointment times.',
-            ),
-            isLoading:
-                _controller.isLoading,
+            icon: Icons.schedule_rounded,
+            onTap: () =>
+                _sendMessage('Show me the next available appointment times.'),
+            isLoading: _controller.isLoading,
           ),
         ],
       ),
     );
   }
 
-  // ==========================================================
-  // BOOKING BUTTON
-  // ==========================================================
-
   Widget _buildBookingButton() {
-    final name =
-        _controller.lastSuggestedServiceName;
+    final name = _controller.lastSuggestedServiceName;
 
     return Padding(
-      padding:
-          const EdgeInsets.fromLTRB(
-        12,
-        0,
-        12,
-        8,
-      ),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: SizedBox(
         width: double.infinity,
         child: FilledButton.icon(
           onPressed: _openBooking,
-          icon: const Icon(
-            Icons.calendar_month_rounded,
-          ),
+          icon: const Icon(Icons.calendar_month_rounded),
           label: Text(
-            name == null
-                ? 'OPEN BOOKING'
-                : 'BOOK ${name.toUpperCase()}',
+            name == null ? 'OPEN BOOKING' : 'BOOK ${name.toUpperCase()}',
             maxLines: 1,
-            overflow:
-                TextOverflow.ellipsis,
+            overflow: TextOverflow.ellipsis,
           ),
-          style:
-              FilledButton.styleFrom(
-            backgroundColor:
-                AppColors.navy,
-            foregroundColor:
-                Colors.white,
-            padding:
-                const EdgeInsets.symmetric(
-              vertical: 13,
-            ),
-            shape:
-                RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(
-                14,
-              ),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.navy,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
             ),
           ),
         ),
@@ -906,33 +621,15 @@ class _FaithAICopilotPanelState
     );
   }
 
-  // ==========================================================
-  // LISTENING BANNER
-  // ==========================================================
-
   Widget _buildListeningBanner() {
     return Container(
       width: double.infinity,
-      margin:
-          const EdgeInsets.fromLTRB(
-        12,
-        0,
-        12,
-        8,
-      ),
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 9,
-      ),
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color:
-            const Color(0xFFFFF7DB),
-        borderRadius:
-            BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.borderGold,
-        ),
+        color: const Color(0xFFFFF7DB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderGold),
       ),
       child: const Row(
         children: [
@@ -944,8 +641,7 @@ class _FaithAICopilotPanelState
               style: TextStyle(
                 color: AppColors.navy,
                 fontSize: 12,
-                fontWeight:
-                    FontWeight.w800,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -954,149 +650,78 @@ class _FaithAICopilotPanelState
     );
   }
 
-  // ==========================================================
-  // INPUT
-  // ==========================================================
-
   Widget _buildInputArea() {
     return Container(
-      padding:
-          const EdgeInsets.fromLTRB(
-        10,
-        8,
-        10,
-        10,
-      ),
-      decoration:
-          const BoxDecoration(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          top: BorderSide(
-            color:
-                AppColors.borderLight,
-          ),
+          top: BorderSide(color: AppColors.borderLight),
         ),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: TextField(
-              controller:
-                  _textController,
-              enabled:
-                  !_controller.isLoading,
+              controller: _textController,
+              enabled: !_controller.isLoading,
               minLines: 1,
               maxLines: 4,
-              textInputAction:
-                  TextInputAction.send,
-              onSubmitted: (_) =>
-                  _sendMessage(),
-              decoration:
-                  InputDecoration(
-                hintText:
-                    'Ask Faithi anything...',
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _sendMessage(),
+              decoration: InputDecoration(
+                hintText: 'Ask Faithi anything...',
                 filled: true,
-                fillColor:
-                    AppColors
-                        .pageBackground,
-                contentPadding:
-                    const EdgeInsets
-                        .symmetric(
+                fillColor: AppColors.pageBackground,
+                contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 12,
                 ),
-                border:
-                    OutlineInputBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    18,
-                  ),
-                  borderSide:
-                      BorderSide.none,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
                 ),
-                focusedBorder:
-                    OutlineInputBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    18,
-                  ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
                   borderSide:
-                      const BorderSide(
-                    color:
-                        AppColors.gold,
-                    width: 1.5,
-                  ),
+                      const BorderSide(color: AppColors.gold, width: 1.5),
                 ),
               ),
             ),
           ),
-
           const SizedBox(width: 8),
-
           SizedBox(
             width: 46,
             height: 46,
             child: IconButton.filled(
-              tooltip: _isListening
-                  ? 'Stop listening'
-                  : 'Voice input',
-              onPressed:
-                  _controller.isLoading
-                      ? null
-                      : _toggleListening,
-              style:
-                  IconButton.styleFrom(
+              tooltip: _isListening ? 'Stop listening' : 'Voice input',
+              onPressed: _controller.isLoading ? null : _toggleListening,
+              style: IconButton.styleFrom(
                 backgroundColor:
-                    _isListening
-                        ? const Color(
-                            0xFFD84A4A,
-                          )
-                        : Colors.white,
+                    _isListening ? const Color(0xFFD84A4A) : Colors.white,
                 foregroundColor:
-                    _isListening
-                        ? Colors.white
-                        : AppColors
-                            .deepGold,
-                side: const BorderSide(
-                  color:
-                      AppColors.borderGold,
-                ),
+                    _isListening ? Colors.white : AppColors.deepGold,
+                side: const BorderSide(color: AppColors.borderGold),
               ),
               icon: Icon(
-                _isListening
-                    ? Icons.mic_rounded
-                    : Icons
-                        .mic_none_rounded,
+                _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
               ),
             ),
           ),
-
           const SizedBox(width: 8),
-
           SizedBox(
             width: 46,
             height: 46,
             child: FilledButton(
-              onPressed:
-                  _controller.isLoading
-                      ? null
-                      : _sendMessage,
-              style:
-                  FilledButton.styleFrom(
-                backgroundColor:
-                    AppColors.gold,
-                foregroundColor:
-                    AppColors.navy,
+              onPressed: _controller.isLoading ? null : _sendMessage,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.gold,
+                foregroundColor: AppColors.navy,
                 padding: EdgeInsets.zero,
-                shape:
-                    const CircleBorder(),
+                shape: const CircleBorder(),
               ),
-              child: const Icon(
-                Icons.send_rounded,
-                size: 20,
-              ),
+              child: const Icon(Icons.send_rounded, size: 20),
             ),
           ),
         ],
@@ -1110,9 +735,7 @@ class _FaithAICopilotPanelState
 // ============================================================
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({
-    required this.message,
-  });
+  const _MessageBubble({required this.message});
 
   final ChatMessage message;
 
@@ -1121,107 +744,62 @@ class _MessageBubble extends StatelessWidget {
     final isUser = message.isUser;
 
     return Align(
-      alignment: isUser
-          ? Alignment.centerRight
-          : Alignment.centerLeft,
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin:
-            const EdgeInsets.symmetric(
-          vertical: 5,
-        ),
-        padding:
-            const EdgeInsets.all(13),
-        constraints:
-            const BoxConstraints(
-          maxWidth: 360,
-        ),
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.all(13),
+        constraints: const BoxConstraints(maxWidth: 360),
         decoration: BoxDecoration(
           gradient: isUser
               ? const LinearGradient(
-                  colors: [
-                    AppColors.gold,
-                    Color(0xFFF0BC27),
-                  ],
+                  colors: [AppColors.gold, Color(0xFFF0BC27)],
                 )
               : null,
-          color:
-              isUser ? null : Colors.white,
-          borderRadius:
-              BorderRadius.only(
-            topLeft:
-                const Radius.circular(18),
-            topRight:
-                const Radius.circular(18),
-            bottomLeft: Radius.circular(
-              isUser ? 18 : 5,
-            ),
-            bottomRight: Radius.circular(
-              isUser ? 5 : 18,
-            ),
+          color: isUser ? null : Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isUser ? 18 : 5),
+            bottomRight: Radius.circular(isUser ? 5 : 18),
           ),
           border: isUser
               ? null
-              : Border.all(
-                  color:
-                      AppColors.borderLight,
-                ),
+              : Border.all(color: AppColors.borderLight),
         ),
         child: Column(
-          crossAxisAlignment: isUser
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisSize:
-                  MainAxisSize.min,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 if (!isUser) ...[
                   const Icon(
-                    Icons
-                        .auto_awesome_rounded,
+                    Icons.auto_awesome_rounded,
                     size: 14,
-                    color:
-                        AppColors.deepGold,
+                    color: AppColors.deepGold,
                   ),
                   const SizedBox(width: 5),
                 ],
                 Text(
                   isUser ? 'You' : 'Faithi',
-                  style:
-                      const TextStyle(
+                  style: const TextStyle(
                     color: AppColors.navy,
                     fontSize: 11,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 5),
-
-            _MarkdownText(
-              text: message.text,
-            ),
-
-            if (!isUser &&
-                message
-                    .serviceImages
-                    .isNotEmpty) ...[
+            _MarkdownText(text: message.text),
+            if (!isUser && message.serviceImages.isNotEmpty) ...[
               const SizedBox(height: 12),
-
-              _ServiceRecommendationImages(
-                images:
-                    message.serviceImages,
-              ),
+              _ServiceRecommendationImages(images: message.serviceImages),
             ],
-
-            if (!isUser &&
-                message.colors.isNotEmpty) ...[
+            if (!isUser && message.colors.isNotEmpty) ...[
               const SizedBox(height: 12),
-              _ColorResults(
-                colors: message.colors,
-              ),
+              _ColorResults(colors: message.colors),
             ],
           ],
         ),
@@ -1234,11 +812,8 @@ class _MessageBubble extends StatelessWidget {
 // 6. SERVICE IMAGES
 // ============================================================
 
-class _ServiceRecommendationImages
-    extends StatelessWidget {
-  const _ServiceRecommendationImages({
-    required this.images,
-  });
+class _ServiceRecommendationImages extends StatelessWidget {
+  const _ServiceRecommendationImages({required this.images});
 
   final List<ServiceImageAttachment> images;
 
@@ -1246,25 +821,17 @@ class _ServiceRecommendationImages
   Widget build(BuildContext context) {
     return Column(
       children: [
-        for (int i = 0;
-            i < images.length;
-            i++) ...[
-          _ServiceImageCard(
-            image: images[i],
-          ),
-          if (i != images.length - 1)
-            const SizedBox(height: 10),
+        for (int i = 0; i < images.length; i++) ...[
+          _ServiceImageCard(image: images[i]),
+          if (i != images.length - 1) const SizedBox(height: 10),
         ],
       ],
     );
   }
 }
 
-class _ServiceImageCard
-    extends StatelessWidget {
-  const _ServiceImageCard({
-    required this.image,
-  });
+class _ServiceImageCard extends StatelessWidget {
+  const _ServiceImageCard({required this.image});
 
   final ServiceImageAttachment image;
 
@@ -1274,63 +841,43 @@ class _ServiceImageCard
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color:
-            AppColors.pageBackground,
-        borderRadius:
-            BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.borderGold,
-        ),
+        color: AppColors.pageBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderGold),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
             aspectRatio: 4 / 3,
             child: Image.network(
               image.url,
               fit: BoxFit.cover,
-              loadingBuilder:
-                  (context, child, progress) {
-                if (progress == null) {
-                  return child;
-                }
-
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
                 return const Center(
-                  child:
-                      CircularProgressIndicator(
+                  child: CircularProgressIndicator(
                     strokeWidth: 2,
                     color: AppColors.gold,
                   ),
                 );
               },
-              errorBuilder:
-                  (_, __, ___) {
+              errorBuilder: (_, __, ___) {
                 return Container(
-                  alignment:
-                      Alignment.center,
-                  color: AppColors
-                      .pageBackground,
+                  alignment: Alignment.center,
+                  color: AppColors.pageBackground,
                   child: const Column(
-                    mainAxisAlignment:
-                        MainAxisAlignment
-                            .center,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        Icons
-                            .broken_image_rounded,
-                        color:
-                            AppColors.muted,
+                        Icons.broken_image_rounded,
+                        color: AppColors.muted,
                         size: 34,
                       ),
                       SizedBox(height: 6),
                       Text(
                         'Style image unavailable',
-                        style: TextStyle(
-                          color:
-                              AppColors.muted,
-                        ),
+                        style: TextStyle(color: AppColors.muted),
                       ),
                     ],
                   ),
@@ -1338,39 +885,27 @@ class _ServiceImageCard
               },
             ),
           ),
-
           Padding(
-            padding:
-                const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(10),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   image.serviceName,
-                  style:
-                      const TextStyle(
+                  style: const TextStyle(
                     color: AppColors.navy,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                     fontSize: 13,
                   ),
                 ),
-
                 if (image.price != null)
                   Padding(
-                    padding:
-                        const EdgeInsets.only(
-                      top: 3,
-                    ),
+                    padding: const EdgeInsets.only(top: 3),
                     child: Text(
                       'Starting at ${image.price}',
-                      style:
-                          const TextStyle(
-                        color: AppColors
-                            .deepGold,
-                        fontWeight:
-                            FontWeight.w800,
+                      style: const TextStyle(
+                        color: AppColors.deepGold,
+                        fontWeight: FontWeight.w800,
                         fontSize: 12,
                       ),
                     ),
@@ -1389,9 +924,7 @@ class _ServiceImageCard
 // ============================================================
 
 class _ColorResults extends StatelessWidget {
-  const _ColorResults({
-    required this.colors,
-  });
+  const _ColorResults({required this.colors});
 
   final List<HairColorResult> colors;
 
@@ -1402,29 +935,18 @@ class _ColorResults extends StatelessWidget {
       runSpacing: 6,
       children: colors.map((color) {
         return Container(
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal: 9,
-            vertical: 6,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
           decoration: BoxDecoration(
-            color:
-                AppColors.pageBackground,
-            borderRadius:
-                BorderRadius.circular(12),
-            border: Border.all(
-              color:
-                  AppColors.borderGold,
-            ),
+            color: AppColors.pageBackground,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.borderGold),
           ),
           child: Text(
             '${color.code} • ${color.name}',
-            style:
-                const TextStyle(
+            style: const TextStyle(
               color: AppColors.navy,
               fontSize: 11,
-              fontWeight:
-                  FontWeight.w700,
+              fontWeight: FontWeight.w700,
             ),
           ),
         );
@@ -1438,30 +960,22 @@ class _ColorResults extends StatelessWidget {
 // ============================================================
 
 class _MarkdownText extends StatelessWidget {
-  const _MarkdownText({
-    required this.text,
-  });
+  const _MarkdownText({required this.text});
 
   final String text;
 
   @override
   Widget build(BuildContext context) {
     final spans = <TextSpan>[];
-
     final split = text.split('**');
 
-    for (int i = 0;
-        i < split.length;
-        i++) {
+    for (int i = 0; i < split.length; i++) {
       if (split[i].isEmpty) continue;
-
       spans.add(
         TextSpan(
           text: split[i],
           style: TextStyle(
-            fontWeight: i.isOdd
-                ? FontWeight.bold
-                : FontWeight.normal,
+            fontWeight: i.isOdd ? FontWeight.bold : FontWeight.normal,
             color: AppColors.navy,
             fontSize: 14,
             height: 1.4,
@@ -1470,9 +984,7 @@ class _MarkdownText extends StatelessWidget {
       );
     }
 
-    return SelectableText.rich(
-      TextSpan(children: spans),
-    );
+    return SelectableText.rich(TextSpan(children: spans));
   }
 }
 
@@ -1496,24 +1008,15 @@ class _QuickChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ActionChip(
-      avatar: Icon(
-        icon,
-        size: 17,
-        color: AppColors.deepGold,
-      ),
+      avatar: Icon(icon, size: 17, color: AppColors.deepGold),
       label: Text(label),
-      onPressed:
-          isLoading ? null : onTap,
+      onPressed: isLoading ? null : onTap,
       backgroundColor: Colors.white,
-      side: const BorderSide(
-        color: AppColors.borderGold,
-      ),
+      side: const BorderSide(color: AppColors.borderGold),
       shape: RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(14),
       ),
-      labelStyle:
-          const TextStyle(
+      labelStyle: const TextStyle(
         color: AppColors.navy,
         fontSize: 12,
         fontWeight: FontWeight.w800,
@@ -1530,37 +1033,24 @@ class _VoicePulse extends StatefulWidget {
   const _VoicePulse();
 
   @override
-  State<_VoicePulse> createState() =>
-      _VoicePulseState();
+  State<_VoicePulse> createState() => _VoicePulseState();
 }
 
-class _VoicePulseState
-    extends State<_VoicePulse>
+class _VoicePulseState extends State<_VoicePulse>
     with SingleTickerProviderStateMixin {
-  late final AnimationController
-      _controller;
-
+  late final AnimationController _controller;
   late final Animation<double> _scale;
 
   @override
   void initState() {
     super.initState();
-
-    _controller =
-        AnimationController(
+    _controller = AnimationController(
       vsync: this,
-      duration:
-          const Duration(milliseconds: 850),
+      duration: const Duration(milliseconds: 850),
     )..repeat(reverse: true);
 
-    _scale = Tween<double>(
-      begin: .85,
-      end: 1.18,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeInOut,
-      ),
+    _scale = Tween<double>(begin: .85, end: 1.18).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
   }
 
@@ -1576,13 +1066,8 @@ class _VoicePulseState
       scale: _scale,
       child: const CircleAvatar(
         radius: 12,
-        backgroundColor:
-            Color(0xFFD84A4A),
-        child: Icon(
-          Icons.mic_rounded,
-          size: 14,
-          color: Colors.white,
-        ),
+        backgroundColor: Color(0xFFD84A4A),
+        child: Icon(Icons.mic_rounded, size: 14, color: Colors.white),
       ),
     );
   }
@@ -1592,30 +1077,23 @@ class _VoicePulseState
 // 11. TYPING INDICATOR
 // ============================================================
 
-class _TypingIndicator
-    extends StatefulWidget {
+class _TypingIndicator extends StatefulWidget {
   const _TypingIndicator();
 
   @override
-  State<_TypingIndicator> createState() =>
-      _TypingIndicatorState();
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
 }
 
-class _TypingIndicatorState
-    extends State<_TypingIndicator>
+class _TypingIndicatorState extends State<_TypingIndicator>
     with SingleTickerProviderStateMixin {
-  late final AnimationController
-      _controller;
+  late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-
-    _controller =
-        AnimationController(
+    _controller = AnimationController(
       vsync: this,
-      duration:
-          const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1200),
     )..repeat();
   }
 
@@ -1628,76 +1106,35 @@ class _TypingIndicatorState
   @override
   Widget build(BuildContext context) {
     return Align(
-      alignment:
-          Alignment.centerLeft,
+      alignment: Alignment.centerLeft,
       child: Container(
-        margin:
-            const EdgeInsets.symmetric(
-          vertical: 5,
-        ),
-        padding:
-            const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius:
-              BorderRadius.circular(17),
-          border: Border.all(
-            color:
-                AppColors.borderLight,
-          ),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: AppColors.borderLight),
         ),
         child: Row(
-          mainAxisSize:
-              MainAxisSize.min,
-          children:
-              List.generate(3, (index) {
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (index) {
             return AnimatedBuilder(
               animation: _controller,
-              builder:
-                  (context, child) {
-                final delay =
-                    index * .2;
-
+              builder: (context, child) {
+                final delay = index * .2;
                 final progress =
-                    (_controller.value -
-                            delay)
-                        .clamp(
-                  0.0,
-                  1.0,
-                );
-
-                final offset =
-                    math.sin(
-                          progress *
-                              math.pi *
-                              2,
-                        ) *
-                        -4;
+                    (_controller.value - delay).clamp(0.0, 1.0);
+                final offset = math.sin(progress * math.pi * 2) * -4;
 
                 return Transform.translate(
-                  offset: Offset(
-                    0,
-                    offset < 0
-                        ? offset
-                        : 0,
-                  ),
+                  offset: Offset(0, offset < 0 ? offset : 0),
                   child: Container(
-                    margin:
-                        const EdgeInsets
-                            .symmetric(
-                      horizontal: 2,
-                    ),
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
                     width: 6,
                     height: 6,
-                    decoration:
-                        const BoxDecoration(
-                      color:
-                          AppColors.muted,
-                      shape:
-                          BoxShape.circle,
+                    decoration: const BoxDecoration(
+                      color: AppColors.muted,
+                      shape: BoxShape.circle,
                     ),
                   ),
                 );
@@ -1714,10 +1151,8 @@ class _TypingIndicatorState
 // 12. CONTROLLER
 // ============================================================
 
-class FaithCopilotController
-    extends ChangeNotifier {
-  static final FaithCopilotController
-      instance =
+class FaithCopilotController extends ChangeNotifier {
+  static final FaithCopilotController instance =
       FaithCopilotController._internal();
 
   FaithCopilotController._internal() {
@@ -1732,52 +1167,40 @@ class FaithCopilotController
     );
   }
 
-  static const String _aiEndpoint =
-      'https://theyoungshallgrow-api-production-3a52.up.railway.app/chat';
+  // CURRENT Railway production backend.
+  static const String _apiBase =
+      'https://theyoungshallgrow-api-production.up.railway.app';
 
-  final SupabaseClient _supabase =
-      Supabase.instance.client;
+  static const String _aiEndpoint = '$_apiBase/chat';
 
+  final SupabaseClient _supabase = Supabase.instance.client;
   final FlutterTts _tts = FlutterTts();
-
   final List<ChatMessage> _messages = [];
 
-  List<ChatMessage> get messages =>
-      List.unmodifiable(_messages);
-
-  bool get hasChatHistory =>
-      _messages.length > 1;
+  List<ChatMessage> get messages => List.unmodifiable(_messages);
+  bool get hasChatHistory => _messages.length > 1;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
   bool _isLoadingData = false;
-  bool get isLoadingData =>
-      _isLoadingData;
+  bool get isLoadingData => _isLoadingData;
 
   bool _showBookingButton = false;
-  bool get showBookingButton =>
-      _showBookingButton;
+  bool get showBookingButton => _showBookingButton;
 
   bool _voiceEnabled = true;
-  bool get voiceEnabled =>
-      _voiceEnabled;
+  bool get voiceEnabled => _voiceEnabled;
 
   bool _voiceInitialized = false;
 
-  final CustomerPreferences
-      preferences =
-      CustomerPreferences();
+  final CustomerPreferences preferences = CustomerPreferences();
 
-  List<Map<String, dynamic>>
-      services = [];
-
-  List<Map<String, dynamic>>
-      hairColors = [];
+  List<Map<String, dynamic>> services = [];
+  List<Map<String, dynamic>> hairColors = [];
 
   String? lastSuggestedServiceName;
   String? lastSuggestedServiceId;
-
   DateTime? _lastSendAt;
 
   // ==========================================================
@@ -1789,82 +1212,45 @@ class FaithCopilotController
 
     try {
       await _tts.setLanguage('en-US');
-
-      // Natural conversational speed.
       await _tts.setSpeechRate(.48);
-
       await _tts.setPitch(1.05);
-
       await _tts.setVolume(1.0);
 
-      // Try to select a female English voice.
       try {
-        final dynamic voices =
-            await _tts.getVoices;
+        final dynamic voices = await _tts.getVoices;
 
         if (voices is List) {
-          final candidates =
-              voices.where((voice) {
-            if (voice is! Map) {
-              return false;
-            }
+          final candidates = voices.where((voice) {
+            if (voice is! Map) return false;
 
             final name =
-                (voice['name'] ?? '')
-                    .toString()
-                    .toLowerCase();
-
+                (voice['name'] ?? '').toString().toLowerCase();
             final locale =
-                (voice['locale'] ?? '')
-                    .toString()
-                    .toLowerCase();
+                (voice['locale'] ?? '').toString().toLowerCase();
 
-            final english =
-                locale.startsWith('en');
-
-            final female =
-                name.contains('female') ||
-                    name.contains(
-                      'jenny',
-                    ) ||
-                    name.contains(
-                      'samantha',
-                    ) ||
-                    name.contains(
-                      'aria',
-                    ) ||
-                    name.contains(
-                      'zira',
-                    ) ||
-                    name.contains(
-                      'ava',
-                    ) ||
-                    name.contains(
-                      'susan',
-                    ) ||
-                    name.contains(
-                      'victoria',
-                    );
+            final english = locale.startsWith('en');
+            final female = name.contains('female') ||
+                name.contains('jenny') ||
+                name.contains('samantha') ||
+                name.contains('aria') ||
+                name.contains('zira') ||
+                name.contains('ava') ||
+                name.contains('susan') ||
+                name.contains('victoria');
 
             return english && female;
           }).toList();
 
           if (candidates.isNotEmpty) {
-            final selected =
-                candidates.first;
-
+            final selected = candidates.first;
             await _tts.setVoice({
-              'name':
-                  selected['name']
-                      .toString(),
-              'locale':
-                  selected['locale']
-                      .toString(),
+              'name': selected['name'].toString(),
+              'locale': selected['locale'].toString(),
             });
           }
         }
       } catch (_) {
-        // Device/browser default voice remains active.
+        // Keep the device/browser default voice.
       }
 
       _voiceInitialized = true;
@@ -1874,8 +1260,7 @@ class FaithCopilotController
   }
 
   Future<void> toggleVoice() async {
-    _voiceEnabled =
-        !_voiceEnabled;
+    _voiceEnabled = !_voiceEnabled;
 
     if (!_voiceEnabled) {
       await _tts.stop();
@@ -1892,14 +1277,10 @@ class FaithCopilotController
     } catch (_) {}
   }
 
-  Future<void> _speak(
-    String text,
-  ) async {
+  Future<void> _speak(String text) async {
     if (!_voiceEnabled) return;
 
-    final cleaned =
-        _textForSpeech(text);
-
+    final cleaned = _textForSpeech(text);
     if (cleaned.isEmpty) return;
 
     try {
@@ -1909,21 +1290,15 @@ class FaithCopilotController
     } catch (_) {}
   }
 
-  String _textForSpeech(
-    String text,
-  ) {
+  String _textForSpeech(String text) {
     return text
         .replaceAll(
-          RegExp(
-            r'https?:\/\/\S+',
-            caseSensitive: false,
-          ),
+          RegExp(r'https?:\/\/\S+', caseSensitive: false),
           '',
         )
         .replaceAll('**', '')
         .replaceAll(
-          RegExp(r'^[•\-]\s*',
-              multiLine: true),
+          RegExp(r'^[•\-]\s*', multiLine: true),
           '',
         )
         .trim();
@@ -1938,45 +1313,25 @@ class FaithCopilotController
     notifyListeners();
 
     try {
-      final rows =
-          await _supabase
-              .from('services')
-              .select()
-              .eq(
-                'is_active',
-                true,
-              )
-              .order(
-                'price',
-                ascending: true,
-              );
+      final rows = await _supabase
+          .from('services')
+          .select()
+          .eq('is_active', true)
+          .order('price', ascending: true);
 
-      services =
-          List<Map<String, dynamic>>.from(
-        rows,
-      );
+      services = List<Map<String, dynamic>>.from(rows);
     } catch (_) {
       services = [];
     }
 
     try {
-      final rows =
-          await _supabase
-              .from('hair_colors')
-              .select()
-              .eq(
-                'is_active',
-                true,
-              )
-              .order(
-                'code',
-                ascending: true,
-              );
+      final rows = await _supabase
+          .from('hair_colors')
+          .select()
+          .eq('is_active', true)
+          .order('code', ascending: true);
 
-      hairColors =
-          List<Map<String, dynamic>>.from(
-        rows,
-      );
+      hairColors = List<Map<String, dynamic>>.from(rows);
     } catch (_) {
       hairColors = [];
     }
@@ -1989,75 +1344,43 @@ class FaithCopilotController
   // SEND MESSAGE
   // ==========================================================
 
-  Future<void> sendMessage(
-    String text,
-  ) async {
+  Future<void> sendMessage(String text) async {
     final cleanText = text.trim();
 
-    if (cleanText.isEmpty ||
-        _isLoading) {
-      return;
-    }
+    if (cleanText.isEmpty || _isLoading) return;
 
     final now = DateTime.now();
-
     if (_lastSendAt != null &&
-        now
-                .difference(_lastSendAt!)
-                .inMilliseconds <
-            450) {
+        now.difference(_lastSendAt!).inMilliseconds < 450) {
       return;
     }
-
     _lastSendAt = now;
 
     await stopSpeaking();
+    preferences.extractAndRemember(cleanText);
 
-    preferences.extractAndRemember(
-      cleanText,
-    );
-
-    _messages.add(
-      ChatMessage(
-        text: cleanText,
-        isUser: true,
-      ),
-    );
+    _messages.add(ChatMessage(text: cleanText, isUser: true));
 
     _isLoading = true;
     notifyListeners();
 
     try {
-      final result =
-          await _fetchAIResponse(
-        cleanText,
-      );
-
-      final reply =
-          _removeRepeatedGreeting(
-        result.reply,
-      );
+      final result = await _fetchAIResponse(cleanText);
+      final reply = _removeRepeatedGreeting(result.reply);
 
       _processAIResponse(
         userText: cleanText,
         reply: reply,
-        structuredRows:
-            result.rows,
+        structuredRows: result.rows,
         meta: result.meta,
       );
 
       await _speak(reply);
-    } catch (error) {
-      final fallback =
-          _localFallback(
-        cleanText,
-      );
+    } catch (_) {
+      final fallback = _localFallback(cleanText);
 
       _messages.add(
-        ChatMessage(
-          text: fallback,
-          isUser: false,
-        ),
+        ChatMessage(text: fallback, isUser: false),
       );
 
       await _speak(fallback);
@@ -2071,66 +1394,39 @@ class FaithCopilotController
   // API
   // ==========================================================
 
-  Future<FaithiApiResult>
-      _fetchAIResponse(
-    String customerMessage,
-  ) async {
-    // Exclude latest user message because it is already
-    // supplied separately as "message".
-    final historySource =
-        _messages.length > 1
-            ? _messages.sublist(
-                0,
-                _messages.length - 1,
-              )
-            : <ChatMessage>[];
+  Future<FaithiApiResult> _fetchAIResponse(String customerMessage) async {
+    final historySource = _messages.length > 1
+        ? _messages.sublist(0, _messages.length - 1)
+        : <ChatMessage>[];
 
-    final recentHistory =
-        historySource.length > 12
-            ? historySource.sublist(
-                historySource.length -
-                    12,
-              )
-            : historySource;
+    final recentHistory = historySource.length > 12
+        ? historySource.sublist(historySource.length - 12)
+        : historySource;
 
-    final history =
-        recentHistory
-            .map(
-              (message) => {
-                'role': message.isUser
-                    ? 'user'
-                    : 'assistant',
-                'content':
-                    message.text,
-              },
-            )
-            .toList();
+    final history = recentHistory
+        .map(
+          (message) => {
+            'role': message.isUser ? 'user' : 'assistant',
+            'content': message.text,
+          },
+        )
+        .toList();
 
     final body = {
-      // CRITICAL:
-      // actual customer message only.
       'message': customerMessage,
-
       'history': history,
-
       'domain': 'hair_salon',
-
       'page': 'ai_chat',
-
       'safe_mode': true,
-
       'advanced_mode': true,
-
       'context': {
-        'app':
-            'faith_hairstyle',
+        'app': 'faith_hairstyle',
         'assistant': 'faithi',
-        'customer_preferences':
-            preferences.toMap(),
+        'backend_generation': 'v4.4+',
+        'customer_preferences': preferences.toMap(),
         'frontend_capabilities': {
           'service_images': true,
-          'booking_navigation':
-              true,
+          'booking_navigation': true,
           'voice_input': true,
           'voice_output': true,
         },
@@ -2141,126 +1437,68 @@ class FaithCopilotController
         .post(
           Uri.parse(_aiEndpoint),
           headers: const {
-            'Content-Type':
-                'application/json',
-            'Accept':
-                'application/json',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
           },
           body: jsonEncode(body),
         )
-        .timeout(
-          const Duration(
-            seconds: 45,
-          ),
-        );
+        .timeout(const Duration(seconds: 45));
 
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
-        'Faithi server returned '
-        '${response.statusCode}.',
+        'Faithi server returned ${response.statusCode}: ${response.body}',
       );
     }
 
-    final dynamic decoded =
-        jsonDecode(response.body);
+    final dynamic decoded = jsonDecode(response.body);
 
     if (decoded is! Map) {
-      throw Exception(
-        'Invalid Faithi response.',
-      );
+      throw Exception('Invalid Faithi response.');
     }
 
-    final reply =
-        (decoded['reply'] ?? '')
-            .toString()
-            .trim();
-
+    final reply = (decoded['reply'] ?? '').toString().trim();
     if (reply.isEmpty) {
-      throw Exception(
-        'Faithi returned no reply.',
-      );
+      throw Exception('Faithi returned no reply.');
     }
 
-    final rows =
-        _extractDataframeRows(
-      decoded['dataframe'],
-    );
+    final rows = _extractDataframeRows(decoded['dataframe']);
 
-    final meta =
-        decoded['meta'] is Map
-            ? Map<String, dynamic>.from(
-                decoded['meta'],
-              )
-            : <String, dynamic>{};
+    final meta = decoded['meta'] is Map
+        ? Map<String, dynamic>.from(decoded['meta'])
+        : <String, dynamic>{};
 
-    return FaithiApiResult(
-      reply: reply,
-      rows: rows,
-      meta: meta,
-    );
+    return FaithiApiResult(reply: reply, rows: rows, meta: meta);
   }
 
   // ==========================================================
   // DATAFRAME PARSER
   // ==========================================================
 
-  List<Map<String, dynamic>>
-      _extractDataframeRows(
-    dynamic dataframe,
-  ) {
-    if (dataframe == null) {
-      return [];
-    }
+  List<Map<String, dynamic>> _extractDataframeRows(dynamic dataframe) {
+    if (dataframe == null) return [];
 
-    // Format:
-    // { "rows": [ {...}, {...} ] }
     if (dataframe is Map) {
-      final rawRows =
-          dataframe['rows'];
+      final rawRows = dataframe['rows'];
 
       if (rawRows is List) {
         return rawRows
             .whereType<Map>()
-            .map(
-              (row) =>
-                  Map<String, dynamic>.from(
-                row,
-              ),
-            )
+            .map((row) => Map<String, dynamic>.from(row))
             .toList();
       }
 
-      // Format:
-      // {
-      //   "columns": ["name","price"],
-      //   "data": [["Cornrows",40]]
-      // }
-      final columns =
-          dataframe['columns'];
+      final columns = dataframe['columns'];
+      final data = dataframe['data'];
 
-      final data =
-          dataframe['data'];
-
-      if (columns is List &&
-          data is List) {
-        final names = columns
-            .map((e) => e.toString())
-            .toList();
-
-        final output =
-            <Map<String, dynamic>>[];
+      if (columns is List && data is List) {
+        final names = columns.map((e) => e.toString()).toList();
+        final output = <Map<String, dynamic>>[];
 
         for (final raw in data) {
           if (raw is! List) continue;
+          final row = <String, dynamic>{};
 
-          final row =
-              <String, dynamic>{};
-
-          for (int i = 0;
-              i < names.length &&
-                  i < raw.length;
-              i++) {
+          for (int i = 0; i < names.length && i < raw.length; i++) {
             row[names[i]] = raw[i];
           }
 
@@ -2270,32 +1508,16 @@ class FaithCopilotController
         return output;
       }
 
-      // Format where dataframe itself
-      // resembles a single row.
-      if (dataframe.containsKey(
-            'name',
-          ) ||
-          dataframe.containsKey(
-            'image_url',
-          )) {
-        return [
-          Map<String, dynamic>.from(
-            dataframe,
-          ),
-        ];
+      if (dataframe.containsKey('name') ||
+          dataframe.containsKey('image_url')) {
+        return [Map<String, dynamic>.from(dataframe)];
       }
     }
 
-    // Direct list format.
     if (dataframe is List) {
       return dataframe
           .whereType<Map>()
-          .map(
-            (row) =>
-                Map<String, dynamic>.from(
-              row,
-            ),
-          )
+          .map((row) => Map<String, dynamic>.from(row))
           .toList();
     }
 
@@ -2309,182 +1531,90 @@ class FaithCopilotController
   void _processAIResponse({
     required String userText,
     required String reply,
-    required List<Map<String, dynamic>>
-        structuredRows,
+    required List<Map<String, dynamic>> structuredRows,
     required Map<String, dynamic> meta,
   }) {
-    final serviceMatches =
-        <Map<String, dynamic>>[];
+    final serviceMatches = <Map<String, dynamic>>[];
+    final colorMatches = <HairColorResult>[];
+    final seenServices = <String>{};
+    final seenColors = <String>{};
 
-    final colorMatches =
-        <HairColorResult>[];
-
-    final seenServices =
-        <String>{};
-
-    final seenColors =
-        <String>{};
-
-    // First use structured backend results.
-    for (final row
-        in structuredRows) {
+    for (final row in structuredRows) {
       final table =
-          (row['_table'] ??
-                  row['source_table'] ??
-                  '')
-              .toString()
-              .toLowerCase();
+          (row['_table'] ?? row['source_table'] ?? '').toString().toLowerCase();
 
-      final name =
-          (row['name'] ?? '')
-              .toString()
-              .trim();
+      final name = (row['name'] ?? '').toString().trim();
+      final imageUrl = (row['image_url'] ?? '').toString().trim();
+      final code = (row['code'] ?? row['detail'] ?? '').toString().trim();
 
-      final imageUrl =
-          (row['image_url'] ?? '')
-              .toString()
-              .trim();
+      final looksLikeColor = table.contains('color') ||
+          (code.isNotEmpty &&
+              imageUrl.isEmpty &&
+              _findLocalColor(code, name) != null);
 
-      final code =
-          (row['code'] ??
-                  row['detail'] ??
-                  '')
-              .toString()
-              .trim();
-
-      final looksLikeColor =
-          table.contains('color') ||
-              (code.isNotEmpty &&
-                  imageUrl.isEmpty &&
-                  _findLocalColor(
-                        code,
-                        name,
-                      ) !=
-                      null);
-
-      if (looksLikeColor &&
-          name.isNotEmpty) {
-        final key =
-            '$code|$name'
-                .toLowerCase();
+      if (looksLikeColor && name.isNotEmpty) {
+        final key = '$code|$name'.toLowerCase();
 
         if (seenColors.add(key)) {
-          colorMatches.add(
-            HairColorResult(
-              code: code,
-              name: name,
-            ),
-          );
+          colorMatches.add(HairColorResult(code: code, name: name));
         }
-
         continue;
       }
 
-      final localService =
-          _matchStructuredService(
-        row,
-      );
+      final localService = _matchStructuredService(row);
 
       if (localService != null) {
-        final key =
-            localService['id']
-                    ?.toString() ??
-                localService['name']
-                    ?.toString() ??
-                '';
+        final key = localService['id']?.toString() ??
+            localService['name']?.toString() ??
+            '';
 
         if (seenServices.add(key)) {
-          serviceMatches.add(
-            localService,
-          );
+          serviceMatches.add(localService);
         }
       }
     }
 
-    // If backend result didn't contain structured service
-    // records, map names mentioned in the answer.
     if (serviceMatches.isEmpty) {
-      serviceMatches.addAll(
-        _findServicesFromText(
-          reply,
-        ),
-      );
+      serviceMatches.addAll(_findServicesFromText(reply));
     }
 
     if (serviceMatches.isEmpty) {
-      serviceMatches.addAll(
-        _findServicesFromText(
-          userText,
-        ),
-      );
+      serviceMatches.addAll(_findServicesFromText(userText));
     }
 
-    // Color fallback from live local public catalog.
-    if (colorMatches.isEmpty &&
-        _isColorIntent(userText)) {
-      final specific =
-          _findColorsFromText(
-        '$userText $reply',
-      );
+    if (colorMatches.isEmpty && _isColorIntent(userText)) {
+      final specific = _findColorsFromText('$userText $reply');
 
       if (specific.isNotEmpty) {
+        colorMatches.addAll(specific);
+      } else if (_asksToShowColors(userText)) {
         colorMatches.addAll(
-          specific,
-        );
-      } else if (_asksToShowColors(
-        userText,
-      )) {
-        colorMatches.addAll(
-          hairColors
-              .take(32)
-              .map(
-                (row) =>
-                    HairColorResult(
-                  code:
-                      (row['code'] ?? '')
-                          .toString(),
-                  name:
-                      (row['name'] ?? '')
-                          .toString(),
+          hairColors.take(32).map(
+                (row) => HairColorResult(
+                  code: (row['code'] ?? '').toString(),
+                  name: (row['name'] ?? '').toString(),
                 ),
               ),
         );
       }
     }
 
-    final images =
-        <ServiceImageAttachment>[];
+    final images = <ServiceImageAttachment>[];
 
-    for (final service
-        in serviceMatches) {
-      final imageUrl =
-          (service['image_url'] ?? '')
-              .toString()
-              .trim();
-
-      if (!_isHttpUrl(imageUrl)) {
-        continue;
-      }
+    for (final service in serviceMatches) {
+      final imageUrl = (service['image_url'] ?? '').toString().trim();
+      if (!_isHttpUrl(imageUrl)) continue;
 
       images.add(
         ServiceImageAttachment(
-          serviceId:
-              service['id']
-                  ?.toString(),
-          serviceName:
-              (service['name'] ??
-                      'Hairstyle')
-                  .toString(),
+          serviceId: service['id']?.toString(),
+          serviceName: (service['name'] ?? 'Hairstyle').toString(),
           url: imageUrl,
-          price: _money(
-            service['price'],
-          ),
+          price: _money(service['price']),
         ),
       );
 
-      if (images.length >= 3) {
-        break;
-      }
+      if (images.length >= 3) break;
     }
 
     _messages.add(
@@ -2497,138 +1627,67 @@ class FaithCopilotController
     );
 
     if (serviceMatches.isNotEmpty) {
-      final selected =
-          serviceMatches.first;
-
-      lastSuggestedServiceName =
-          selected['name']
-              ?.toString();
-
-      lastSuggestedServiceId =
-          selected['id']
-              ?.toString();
+      final selected = serviceMatches.first;
+      lastSuggestedServiceName = selected['name']?.toString();
+      lastSuggestedServiceId = selected['id']?.toString();
     }
 
-    final intent =
-        (meta['intent'] ?? '')
-            .toString()
-            .toLowerCase();
+    final intent = (meta['intent'] ?? '').toString().toLowerCase();
 
     if (_isBookingIntent(userText) ||
         _isBookingIntent(reply) ||
         intent == 'booking' ||
         serviceMatches.isNotEmpty) {
       _showBookingButton =
-          serviceMatches.isNotEmpty ||
-              getSuggestedService() !=
-                  null;
+          serviceMatches.isNotEmpty || getSuggestedService() != null;
     }
   }
 
-  // ==========================================================
-  // STRUCTURED SERVICE MATCHING
-  // ==========================================================
-
-  Map<String, dynamic>?
-      _matchStructuredService(
-    Map<String, dynamic> row,
-  ) {
-    final id =
-        (row['id'] ??
-                row['service_id'] ??
-                '')
-            .toString();
+  Map<String, dynamic>? _matchStructuredService(Map<String, dynamic> row) {
+    final id = (row['id'] ?? row['service_id'] ?? '').toString();
 
     if (id.isNotEmpty) {
-      for (final service
-          in services) {
-        if (service['id']
-                ?.toString() ==
-            id) {
-          return service;
-        }
+      for (final service in services) {
+        if (service['id']?.toString() == id) return service;
       }
     }
 
-    final name =
-        (row['name'] ??
-                row['service_name'] ??
-                '')
-            .toString()
-            .trim()
-            .toLowerCase();
+    final name = (row['name'] ?? row['service_name'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
 
     if (name.isNotEmpty) {
-      for (final service
-          in services) {
+      for (final service in services) {
         final localName =
-            (service['name'] ?? '')
-                .toString()
-                .trim()
-                .toLowerCase();
-
-        if (localName == name) {
-          return service;
-        }
+            (service['name'] ?? '').toString().trim().toLowerCase();
+        if (localName == name) return service;
       }
     }
 
     return null;
   }
 
-  // ==========================================================
-  // SERVICE DETECTION
-  // ==========================================================
-
-  List<Map<String, dynamic>>
-      _findServicesFromText(
-    String text,
-  ) {
-    final lower =
-        text.toLowerCase();
-
-    final matches =
-        <Map<String, dynamic>>[];
-
+  List<Map<String, dynamic>> _findServicesFromText(String text) {
+    final lower = text.toLowerCase();
+    final matches = <Map<String, dynamic>>[];
     final seen = <String>{};
 
-    for (final service
-        in services) {
-      final name =
-          (service['name'] ?? '')
-              .toString()
-              .trim();
-
+    for (final service in services) {
+      final name = (service['name'] ?? '').toString().trim();
       if (name.isEmpty) continue;
 
-      if (lower.contains(
-        name.toLowerCase(),
-      )) {
-        final id =
-            service['id']
-                    ?.toString() ??
-                name.toLowerCase();
-
-        if (seen.add(id)) {
-          matches.add(service);
-        }
+      if (lower.contains(name.toLowerCase())) {
+        final id = service['id']?.toString() ?? name.toLowerCase();
+        if (seen.add(id)) matches.add(service);
       }
     }
 
-    return matches
-        .take(5)
-        .toList();
+    return matches.take(5).toList();
   }
 
-  // ==========================================================
-  // COLOR DETECTION
-  // ==========================================================
-
-  bool _isColorIntent(
-    String text,
-  ) {
-    final lower =
-        text.toLowerCase();
+  bool _isColorIntent(String text) {
+    final lower = text.toLowerCase();
 
     return lower.contains('color') ||
         lower.contains('colour') ||
@@ -2649,88 +1708,43 @@ class FaithCopilotController
         ).hasMatch(lower);
   }
 
-  bool _asksToShowColors(
-    String text,
-  ) {
-    final lower =
-        text.toLowerCase();
+  bool _asksToShowColors(String text) {
+    final lower = text.toLowerCase();
 
-    return lower.contains(
-          'show color',
-        ) ||
-        lower.contains(
-          'show me color',
-        ) ||
-        lower.contains(
-          'available color',
-        ) ||
-        lower.contains(
-          'what color',
-        ) ||
-        lower.trim() ==
-            'colors' ||
-        lower.trim() ==
-            'colours';
+    return lower.contains('show color') ||
+        lower.contains('show me color') ||
+        lower.contains('available color') ||
+        lower.contains('what color') ||
+        lower.trim() == 'colors' ||
+        lower.trim() == 'colours';
   }
 
-  List<HairColorResult>
-      _findColorsFromText(
-    String text,
-  ) {
-    final lower =
-        text.toLowerCase();
-
-    final output =
-        <HairColorResult>[];
-
+  List<HairColorResult> _findColorsFromText(String text) {
+    final lower = text.toLowerCase();
+    final output = <HairColorResult>[];
     final seen = <String>{};
 
-    for (final row
-        in hairColors) {
-      final code =
-          (row['code'] ?? '')
-              .toString()
-              .trim();
+    for (final row in hairColors) {
+      final code = (row['code'] ?? '').toString().trim();
+      final name = (row['name'] ?? '').toString().trim();
 
-      final name =
-          (row['name'] ?? '')
-              .toString()
-              .trim();
+      if (code.isEmpty && name.isEmpty) continue;
 
-      if (code.isEmpty &&
-          name.isEmpty) {
-        continue;
-      }
-
-      final codeMatch =
-          code.isNotEmpty &&
-              RegExp(
-                r'(^|[^a-z0-9])' +
-                    RegExp.escape(
-                      code.toLowerCase(),
-                    ) +
-                    r'([^a-z0-9]|$)',
-              ).hasMatch(lower);
+      final codeMatch = code.isNotEmpty &&
+          RegExp(
+            r'(^|[^a-z0-9])' +
+                RegExp.escape(code.toLowerCase()) +
+                r'([^a-z0-9]|$)',
+          ).hasMatch(lower);
 
       final nameMatch =
-          name.isNotEmpty &&
-              lower.contains(
-                name.toLowerCase(),
-              );
+          name.isNotEmpty && lower.contains(name.toLowerCase());
 
-      if (codeMatch ||
-          nameMatch) {
-        final key =
-            '$code|$name'
-                .toLowerCase();
+      if (codeMatch || nameMatch) {
+        final key = '$code|$name'.toLowerCase();
 
         if (seen.add(key)) {
-          output.add(
-            HairColorResult(
-              code: code,
-              name: name,
-            ),
-          );
+          output.add(HairColorResult(code: code, name: name));
         }
       }
     }
@@ -2738,32 +1752,18 @@ class FaithCopilotController
     return output;
   }
 
-  Map<String, dynamic>?
-      _findLocalColor(
-    String code,
-    String name,
-  ) {
-    for (final row
-        in hairColors) {
-      final localCode =
-          (row['code'] ?? '')
-              .toString()
-              .trim();
-
-      final localName =
-          (row['name'] ?? '')
-              .toString()
-              .trim();
+  Map<String, dynamic>? _findLocalColor(String code, String name) {
+    for (final row in hairColors) {
+      final localCode = (row['code'] ?? '').toString().trim();
+      final localName = (row['name'] ?? '').toString().trim();
 
       if (code.isNotEmpty &&
-          localCode.toLowerCase() ==
-              code.toLowerCase()) {
+          localCode.toLowerCase() == code.toLowerCase()) {
         return row;
       }
 
       if (name.isNotEmpty &&
-          localName.toLowerCase() ==
-              name.toLowerCase()) {
+          localName.toLowerCase() == name.toLowerCase()) {
         return row;
       }
     }
@@ -2771,33 +1771,19 @@ class FaithCopilotController
     return null;
   }
 
-  // ==========================================================
-  // BOOKING SERVICE
-  // ==========================================================
-
-  Map<String, dynamic>?
-      getSuggestedService() {
-    if (lastSuggestedServiceId !=
-        null) {
-      for (final service
-          in services) {
-        if (service['id']
-                ?.toString() ==
-            lastSuggestedServiceId) {
+  Map<String, dynamic>? getSuggestedService() {
+    if (lastSuggestedServiceId != null) {
+      for (final service in services) {
+        if (service['id']?.toString() == lastSuggestedServiceId) {
           return service;
         }
       }
     }
 
-    if (lastSuggestedServiceName !=
-        null) {
-      for (final service
-          in services) {
-        if ((service['name'] ?? '')
-                .toString()
-                .toLowerCase() ==
-            lastSuggestedServiceName!
-                .toLowerCase()) {
+    if (lastSuggestedServiceName != null) {
+      for (final service in services) {
+        if ((service['name'] ?? '').toString().toLowerCase() ==
+            lastSuggestedServiceName!.toLowerCase()) {
           return service;
         }
       }
@@ -2806,68 +1792,35 @@ class FaithCopilotController
     return null;
   }
 
-  bool _isBookingIntent(
-    String text,
-  ) {
-    final lower =
-        text.toLowerCase();
+  bool _isBookingIntent(String text) {
+    final lower = text.toLowerCase();
 
     return lower.contains('book') ||
-        lower.contains(
-          'appointment',
-        ) ||
-        lower.contains(
-          'schedule',
-        ) ||
-        lower.contains(
-          'reserve',
-        ) ||
-        lower.contains(
-          'availability',
-        ) ||
-        lower.contains(
-          'available time',
-        ) ||
-        lower.contains(
-          'open time',
-        );
+        lower.contains('appointment') ||
+        lower.contains('schedule') ||
+        lower.contains('reserve') ||
+        lower.contains('availability') ||
+        lower.contains('available time') ||
+        lower.contains('open time');
   }
 
-  // ==========================================================
-  // FALLBACK
-  // ==========================================================
+  String _localFallback(String customerMessage) {
+    final lower = customerMessage.toLowerCase();
 
-  String _localFallback(
-    String customerMessage,
-  ) {
-    final lower =
-        customerMessage.toLowerCase();
-
-    if (_isColorIntent(
-      customerMessage,
-    )) {
+    if (_isColorIntent(customerMessage)) {
       if (hairColors.isEmpty) {
         return 'I could not load the live hair colors right now. Please try again.';
       }
 
-      final colors =
-          hairColors
-              .take(12)
-              .map(
-                (row) =>
-                    '${row['code']} — ${row['name']}',
-              )
-              .join(', ');
+      final colors = hairColors
+          .take(12)
+          .map((row) => '${row['code']} — ${row['name']}')
+          .join(', ');
 
       return 'Available colors include: $colors.';
     }
 
-    if (lower.contains(
-          'price',
-        ) ||
-        lower.contains(
-          'budget',
-        )) {
+    if (lower.contains('price') || lower.contains('budget')) {
       return 'I can help you choose a Faith Hairstyle service within your budget. What is your budget?';
     }
 
@@ -2875,33 +1828,16 @@ class FaithCopilotController
         'I can still help you explore Faith Hairstyle services, colors, pictures, and booking.';
   }
 
-  // ==========================================================
-  // HELPERS
-  // ==========================================================
-
-  void addSystemMessage(
-    String text,
-  ) {
-    _messages.add(
-      ChatMessage(
-        text: text,
-        isUser: false,
-      ),
-    );
-
+  void addSystemMessage(String text) {
+    _messages.add(ChatMessage(text: text, isUser: false));
     notifyListeners();
-
     _speak(text);
   }
 
-  String _removeRepeatedGreeting(
-    String text,
-  ) {
-    var cleaned =
-        text.trimLeft();
+  String _removeRepeatedGreeting(String text) {
+    var cleaned = text.trimLeft();
 
-    cleaned =
-        cleaned.replaceFirst(
+    cleaned = cleaned.replaceFirst(
       RegExp(
         r'^(?:good\s+(?:morning|afternoon|evening)|hello(?:\s+again)?|hi(?:\s+again)?)[!,.:\-\s]*',
         caseSensitive: false,
@@ -2909,8 +1845,7 @@ class FaithCopilotController
       '',
     );
 
-    cleaned =
-        cleaned.replaceFirst(
+    cleaned = cleaned.replaceFirst(
       RegExp(
         r"^(?:i['’]?m|i am)\s+(?:faith\s+ai|faithi)(?:,\s*your\s+salon\s+copilot)?[!,.:\-\s]*",
         caseSensitive: false,
@@ -2918,41 +1853,25 @@ class FaithCopilotController
       '',
     );
 
-    if (cleaned.trim().isEmpty) {
-      return text.trim();
-    }
-
+    if (cleaned.trim().isEmpty) return text.trim();
     return cleaned.trimLeft();
   }
 
-  bool _isHttpUrl(
-    String value,
-  ) {
-    final uri =
-        Uri.tryParse(value);
+  bool _isHttpUrl(String value) {
+    final uri = Uri.tryParse(value);
 
     return uri != null &&
-        (uri.scheme == 'http' ||
-            uri.scheme == 'https') &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
         uri.host.isNotEmpty;
   }
 
-  String? _money(
-    dynamic value,
-  ) {
+  String? _money(dynamic value) {
     if (value == null) return null;
 
-    final parsed =
-        double.tryParse(
-      value.toString(),
-    );
+    final parsed = double.tryParse(value.toString());
+    if (parsed == null) return value.toString();
 
-    if (parsed == null) {
-      return value.toString();
-    }
-
-    if (parsed ==
-        parsed.roundToDouble()) {
+    if (parsed == parsed.roundToDouble()) {
       return '\$${parsed.toStringAsFixed(0)}';
     }
 
@@ -2972,10 +1891,7 @@ class FaithiApiResult {
   });
 
   final String reply;
-
-  final List<Map<String, dynamic>>
-      rows;
-
+  final List<Map<String, dynamic>> rows;
   final Map<String, dynamic> meta;
 }
 
@@ -2993,10 +1909,7 @@ class ChatMessage {
 
   final String text;
   final bool isUser;
-
-  final List<ServiceImageAttachment>
-      serviceImages;
-
+  final List<ServiceImageAttachment> serviceImages;
   final List<HairColorResult> colors;
 }
 
@@ -3044,21 +1957,16 @@ class CustomerPreferences {
   String? occasion;
   String? datePreference;
 
-  void extractAndRemember(
-    String text,
-  ) {
-    final lower =
-        text.toLowerCase();
+  void extractAndRemember(String text) {
+    final lower = text.toLowerCase();
 
-    final budgetMatch =
-        RegExp(
+    final budgetMatch = RegExp(
       r'(?:\$\s*|budget(?:\s+is|\s+of|\s+around|\s+about|\s+under)?\s*\$?)(\d{2,4})',
       caseSensitive: false,
     ).firstMatch(text);
 
     if (budgetMatch != null) {
-      budget =
-          '\$${budgetMatch.group(1)}';
+      budget = '\$${budgetMatch.group(1)}';
     }
 
     for (final value in [
@@ -3071,9 +1979,7 @@ class CustomerPreferences {
       'under butt',
       'butt length',
     ]) {
-      if (lower.contains(value)) {
-        length = value;
-      }
+      if (lower.contains(value)) length = value;
     }
 
     for (final value in [
@@ -3085,13 +1991,10 @@ class CustomerPreferences {
       'medium',
       'small',
     ]) {
-      if (lower.contains(value)) {
-        size = value;
-      }
+      if (lower.contains(value)) size = value;
     }
 
-    final colorMatch =
-        RegExp(
+    final colorMatch = RegExp(
       r'(?:color|colour)\s*(?:#|number|no\.?|code)?\s*([a-z0-9\/]+)',
       caseSensitive: false,
     ).firstMatch(text);
@@ -3110,9 +2013,7 @@ class CustomerPreferences {
       'photoshoot',
       'photo shoot',
     ]) {
-      if (lower.contains(value)) {
-        occasion = value;
-      }
+      if (lower.contains(value)) occasion = value;
     }
 
     final dateWords = [
@@ -3130,32 +2031,21 @@ class CustomerPreferences {
       'evening',
     ];
 
-    final mentioned =
-        dateWords
-            .where(lower.contains)
-            .toList();
+    final mentioned = dateWords.where(lower.contains).toList();
 
     if (mentioned.isNotEmpty) {
-      datePreference =
-          mentioned.join(', ');
+      datePreference = mentioned.join(', ');
     }
   }
 
   Map<String, dynamic> toMap() {
     return {
-      if (budget != null)
-        'budget': budget,
-      if (length != null)
-        'length': length,
-      if (size != null)
-        'size': size,
-      if (color != null)
-        'color': color,
-      if (occasion != null)
-        'occasion': occasion,
-      if (datePreference != null)
-        'date_time_preference':
-            datePreference,
+      if (budget != null) 'budget': budget,
+      if (length != null) 'length': length,
+      if (size != null) 'size': size,
+      if (color != null) 'color': color,
+      if (occasion != null) 'occasion': occasion,
+      if (datePreference != null) 'date_time_preference': datePreference,
     };
   }
 }
@@ -3165,30 +2055,13 @@ class CustomerPreferences {
 // ============================================================
 
 class AppColors {
-  static const Color navy =
-      Color(0xFF071A42);
-
-  static const Color deepBlue =
-      Color(0xFF0A2D6E);
-
-  static const Color royalBlue =
-      Color(0xFF0754AD);
-
-  static const Color gold =
-      Color(0xFFE4AD16);
-
-  static const Color deepGold =
-      Color(0xFF9A6800);
-
-  static const Color pageBackground =
-      Color(0xFFF6F8FC);
-
-  static const Color borderGold =
-      Color(0xFFD8B649);
-
-  static const Color borderLight =
-      Color(0xFFE6EAF2);
-
-  static const Color muted =
-      Color(0xFF667085);
+  static const Color navy = Color(0xFF071A42);
+  static const Color deepBlue = Color(0xFF0A2D6E);
+  static const Color royalBlue = Color(0xFF0754AD);
+  static const Color gold = Color(0xFFE4AD16);
+  static const Color deepGold = Color(0xFF9A6800);
+  static const Color pageBackground = Color(0xFFF6F8FC);
+  static const Color borderGold = Color(0xFFD8B649);
+  static const Color borderLight = Color(0xFFE6EAF2);
+  static const Color muted = Color(0xFF667085);
 }
