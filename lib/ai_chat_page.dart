@@ -1229,7 +1229,7 @@ class FaithCopilotController extends ChangeNotifier {
   }
 
   final _supabase = Supabase.instance.client;
-  static const String _aiEndpoint = 'https://dinmax-ai-production.up.railway.app/chat';
+  static const String _aiEndpoint = 'https://dinmax-ai-production.up.railway.app/chat-fast';
   
   final List<ChatMessage> _messages = [];
   List<ChatMessage> get messages => _messages;
@@ -1463,25 +1463,57 @@ class FaithCopilotController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Keep greetings instant and salon-specific instead of sending them to
+      // the general DinMax backend.
+      if (_isGreeting(cleanText)) {
+        _messages.add(
+          const ChatMessage(
+            text:
+                'Hi! I’m Faith AI. I can help you choose a hairstyle, compare starting prices, show real salon photos, check colors, and get ready to book.',
+            isUser: false,
+          ),
+        );
+        return;
+      }
+
+      if (services.isEmpty) {
+        await loadSalonData();
+      }
+
       // Image requests are resolved locally from the live Supabase service
       // records. This prevents the language model from inventing "Image 1",
       // "Image 2", fake URLs, or descriptions without an actual photo.
       if (_isImageRequest(cleanText)) {
-        if (services.isEmpty) {
-          await loadSalonData();
-        }
         final handled = _handleImageRequestLocally(cleanText);
         if (handled) return;
+      }
+
+      // "Show me Cornrows" should display the real catalog image immediately,
+      // even when the customer does not explicitly say "image".
+      if (_isDirectServicePreviewRequest(cleanText)) {
+        final matched = _findServicesFromText(cleanText);
+        if (matched.isNotEmpty) {
+          _addImageMessage(
+            matched,
+            intro: matched.length == 1
+                ? 'Here is ${_serviceName(matched.first)} from our live salon catalog.'
+                : 'Here are the matching styles from our live salon catalog.',
+            includeMissingNote: true,
+          );
+          return;
+        }
       }
 
       final reply = await _fetchAIResponse(cleanText);
       final cleanedReply = _removeRepeatedGreeting(reply);
       _processAIResponse(cleanText, cleanedReply);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('Faith AI request failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
       _messages.add(
         const ChatMessage(
           text:
-              'I could not connect to Faith AI right now. Please try again in a moment.',
+              'Faith AI is taking longer than expected. You can still ask me to show a hairstyle photo, compare a listed service, or try again.',
           isUser: false,
         ),
       );
@@ -1489,6 +1521,37 @@ class FaithCopilotController extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  bool _isGreeting(String text) {
+    final value = text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    const greetings = {
+      'h',
+      'hi',
+      'hello',
+      'hey',
+      'hey there',
+      'good morning',
+      'good afternoon',
+      'good evening',
+    };
+    return greetings.contains(value);
+  }
+
+  bool _isDirectServicePreviewRequest(String text) {
+    final lower = text.toLowerCase();
+    final wantsPreview = lower.contains('show me') ||
+        lower.contains('let me see') ||
+        lower.contains('see the') ||
+        lower.contains('view ') ||
+        lower.startsWith('show ');
+    if (!wantsPreview) return false;
+    return _findServicesFromText(text).isNotEmpty;
   }
 
   bool _isImageRequest(String text) {
@@ -1901,7 +1964,7 @@ class FaithCopilotController extends ChangeNotifier {
           },
           body: jsonEncode({'message': systemPrompt}),
         )
-        .timeout(const Duration(seconds: 45));
+        .timeout(const Duration(seconds: 80));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Faith AI server returned ${response.statusCode}.');
@@ -2419,19 +2482,19 @@ class AIContextBuilder {
     FaithCopilotController controller,
     String latestMessage,
   ) {
-    final retrieved = controller.retrieveKnowledge(latestMessage, limit: 10);
+    final retrieved = controller.retrieveKnowledge(latestMessage, limit: 6);
 
     final knowledgeContext = retrieved.isEmpty
         ? 'No matching live salon records were found.'
-        : retrieved.map((doc) => '- ${_clip(doc.text, 430)}').join('\n');
+        : retrieved.map((doc) => '- ${_clip(doc.text, 260)}').join('\n');
 
-    final recentMessages = controller.messages.length > 8
-        ? controller.messages.sublist(controller.messages.length - 8)
+    final recentMessages = controller.messages.length > 4
+        ? controller.messages.sublist(controller.messages.length - 4)
         : controller.messages;
 
     final chatContext = recentMessages.map((message) {
       final role = message.isUser ? 'Customer' : 'Faith AI';
-      return '$role: ${_clip(message.text, 300)}';
+      return '$role: ${_clip(message.text, 180)}';
     }).join('\n');
 
     final prompt = '''
@@ -2484,15 +2547,15 @@ RECENT CONVERSATION
 $chatContext
 
 LATEST CUSTOMER MESSAGE
-${_clip(latestMessage, 800)}
+${_clip(latestMessage, 500)}
 '''.trim();
 
     // Keep the final request below the Railway compact-message ceiling while
     // always preserving the customer's latest message at the end.
-    if (prompt.length <= 10800) return prompt;
-    final latestBlock = '\n\nLATEST CUSTOMER MESSAGE\n${_clip(latestMessage, 800)}';
-    final room = 10800 - latestBlock.length;
-    if (room <= 0) return latestBlock.substring(0, 10800);
+    if (prompt.length <= 5200) return prompt;
+    final latestBlock = '\n\nLATEST CUSTOMER MESSAGE\n${_clip(latestMessage, 500)}';
+    final room = 5200 - latestBlock.length;
+    if (room <= 0) return latestBlock.substring(0, 5200);
     return '${prompt.substring(0, room)}$latestBlock';
   }
 
