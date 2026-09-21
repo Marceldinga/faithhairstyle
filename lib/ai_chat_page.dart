@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -22,7 +23,8 @@ import 'booking_page.dart';
 // 9. Keeps booking integration.
 // 10. Keeps speech input.
 // 11. Keeps local salon knowledge retrieval.
-// 12. Uses TheYoungShallGrow Railway backend.
+// 12. Uses TheYoungShallGrow Railway /chat backend.
+// 13. Recognizes kids / kid / child / children as salon requests.
 // ============================================================
 
 // ==========================================
@@ -1113,10 +1115,6 @@ class _ServiceImageCard extends StatelessWidget {
   }
 }
 
-// ==========================================
-// MARKDOWN + IMAGE PARSER
-// ==========================================
-
 class _ParsedMessageContent extends StatelessWidget {
   const _ParsedMessageContent({
     required this.text,
@@ -1127,7 +1125,6 @@ class _ParsedMessageContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageRegex = RegExp(r'!\[(.*?)\]\((.*?)\)');
-
     final matches = imageRegex.allMatches(text);
 
     if (matches.isEmpty) {
@@ -1159,28 +1156,15 @@ class _ParsedMessageContent extends StatelessWidget {
               child: Image.network(
                 imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
+                errorBuilder: (_, __, ___) => Container(
                   height: 150,
                   width: double.infinity,
                   color: AppColors.pageBackground,
                   alignment: Alignment.center,
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.broken_image_rounded,
-                        color: AppColors.muted,
-                        size: 32,
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Image not available',
-                        style: TextStyle(
-                          color: AppColors.muted,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                  child: const Icon(
+                    Icons.broken_image_rounded,
+                    color: AppColors.muted,
+                    size: 32,
                   ),
                 ),
               ),
@@ -1235,13 +1219,13 @@ class _MarkdownText extends StatelessWidget {
     for (int i = 0; i < split.length; i++) {
       if (split[i].isEmpty) continue;
 
-      final isBold = i % 2 != 0;
-
       spans.add(
         TextSpan(
           text: split[i],
           style: TextStyle(
-            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            fontWeight: i % 2 != 0
+                ? FontWeight.bold
+                : FontWeight.normal,
             color: AppColors.navy,
             fontSize: 14,
             height: 1.4,
@@ -1255,10 +1239,6 @@ class _MarkdownText extends StatelessWidget {
     );
   }
 }
-
-// ==========================================
-// QUICK CHIP
-// ==========================================
 
 class _QuickChip extends StatelessWidget {
   const _QuickChip({
@@ -1296,10 +1276,6 @@ class _QuickChip extends StatelessWidget {
     );
   }
 }
-
-// ==========================================
-// VOICE ANIMATION
-// ==========================================
 
 class _VoicePulse extends StatefulWidget {
   const _VoicePulse();
@@ -1356,10 +1332,6 @@ class _VoicePulseState extends State<_VoicePulse>
   }
 }
 
-// ==========================================
-// TYPING INDICATOR
-// ==========================================
-
 class _TypingIndicator extends StatefulWidget {
   const _TypingIndicator();
 
@@ -1411,10 +1383,8 @@ class _TypingIndicatorState extends State<_TypingIndicator>
                 animation: _controller,
                 builder: (context, child) {
                   final delay = index * .2;
-
                   final progress =
                       (_controller.value - delay).clamp(0.0, 1.0);
-
                   final offset =
                       math.sin(progress * math.pi * 2) * -4;
 
@@ -1464,11 +1434,12 @@ class FaithCopilotController extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
 
   // ============================================================
-  // NEW BACKEND
+  // THE YOUNG SHALL GROW RAILWAY BACKEND
+  // VERIFIED WORKING ROUTE: POST /chat
   // ============================================================
 
   static const String _aiEndpoint =
-      'https://theyoungshallgrow-api-production-3a52.up.railway.app/chat-fast';
+      'https://theyoungshallgrow-api-production-3a52.up.railway.app/chat';
 
   final List<ChatMessage> _messages = [];
 
@@ -1499,10 +1470,6 @@ class FaithCopilotController extends ChangeNotifier {
   final List<String> _lastMentionedServiceNames = [];
 
   DateTime? _lastSendAt;
-
-  // ==========================================
-  // SALON DATA
-  // ==========================================
 
   Future<void> loadSalonData() async {
     _isLoadingData = true;
@@ -1582,10 +1549,6 @@ class FaithCopilotController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ==========================================
-  // KNOWLEDGE INDEX
-  // ==========================================
-
   void _rebuildKnowledgeIndex() {
     knowledgeDocuments
       ..clear()
@@ -1593,19 +1556,12 @@ class FaithCopilotController extends ChangeNotifier {
 
     for (final service in services) {
       final id = (service['id'] ?? '').toString();
-
       final name = (service['name'] ?? 'Hairstyle').toString().trim();
-
       final category = (service['category'] ?? 'Style').toString().trim();
-
       final description = (service['description'] ?? '').toString().trim();
-
       final price = AIContextBuilder.money(service['price']);
-
-      final duration = AIContextBuilder.duration(
-        service['duration_minutes'],
-      );
-
+      final duration =
+          AIContextBuilder.duration(service['duration_minutes']);
       final imageUrl = (service['image_url'] ?? '').toString().trim();
 
       knowledgeDocuments.add(
@@ -1736,10 +1692,6 @@ class FaithCopilotController extends ChangeNotifier {
     );
   }
 
-  // ==========================================
-  // TYPO CORRECTION
-  // ==========================================
-
   String _normalizeCustomerMessage(String text) {
     var value = text.trim().replaceAll(RegExp(r'\s+'), ' ');
 
@@ -1748,7 +1700,6 @@ class FaithCopilotController extends ChangeNotifier {
       RegExp(r'\bbrad\b', caseSensitive: false): 'braid',
       RegExp(r'\bbrads\b', caseSensitive: false): 'braids',
       RegExp(r'\bbraide\b', caseSensitive: false): 'braid',
-      RegExp(r'\bbraids\b', caseSensitive: false): 'braids',
       RegExp(r'\bknotles\b', caseSensitive: false): 'knotless',
       RegExp(r'\bknotlesss\b', caseSensitive: false): 'knotless',
       RegExp(r'\bsenegalise\b', caseSensitive: false): 'senegalese',
@@ -1767,10 +1718,6 @@ class FaithCopilotController extends ChangeNotifier {
     return value.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  // ==========================================
-  // SALON INTENT
-  // ==========================================
-
   bool _isSalonIntent(String text) {
     final lower = _normalizeCustomerMessage(text).toLowerCase();
 
@@ -1782,6 +1729,10 @@ class FaithCopilotController extends ChangeNotifier {
       'hairstyles',
       'style',
       'styles',
+      'kid',
+      'kids',
+      'child',
+      'children',
       'knotless',
       'cornrow',
       'cornrows',
@@ -1828,10 +1779,6 @@ class FaithCopilotController extends ChangeNotifier {
     return terms.any(lower.contains);
   }
 
-  // ==========================================
-  // WRONG STATISTICS DETECTOR
-  // ==========================================
-
   bool _looksLikeWrongStatisticsResponse(String text) {
     final lower = text.toLowerCase();
 
@@ -1846,9 +1793,7 @@ class FaithCopilotController extends ChangeNotifier {
     ];
 
     for (final signal in strongSignals) {
-      if (lower.contains(signal)) {
-        matches++;
-      }
+      if (lower.contains(signal)) matches++;
     }
 
     if (RegExp(r'\bcount\s*:').hasMatch(lower)) matches++;
@@ -1862,13 +1807,25 @@ class FaithCopilotController extends ChangeNotifier {
     return matches >= 2;
   }
 
-  // ==========================================
-  // LOCAL SALON FALLBACK
-  // ==========================================
-
   String _salonFallback(String customerMessage) {
     final lower =
         _normalizeCustomerMessage(customerMessage).toLowerCase();
+
+    if (lower.contains('kid') ||
+        lower.contains('child') ||
+        lower.contains('children')) {
+      final kids = _findServiceByExactName('Kids Styling');
+
+      if (kids != null) {
+        final price = AIContextBuilder.money(kids['price']);
+
+        return 'Yes! We offer Kids Styling, starting at $price. '
+            'You can ask to see the salon photo or book this service.';
+      }
+
+      return 'Yes! I can help with kids hairstyles. '
+          'Tell me what style you are looking for.';
+    }
 
     if (lower.contains('braid') ||
         lower.contains('cornrow') ||
@@ -1899,17 +1856,10 @@ class FaithCopilotController extends ChangeNotifier {
           },
         ).join('\n');
 
-        return '''
-Absolutely! Here are some braid styles from our live salon catalog:
-
-$names
-
-Which one would you like to see?
-'''
-            .trim();
+        return 'Absolutely! Here are some braid styles from our live salon catalog:\n\n'
+            '$names\n\n'
+            'Which one would you like to see?';
       }
-
-      return 'Absolutely! I can help you choose a braid style. Tell me the style, size, length, or budget you prefer.';
     }
 
     if (lower.contains('twist')) {
@@ -1938,7 +1888,7 @@ Which one would you like to see?
         return 'Absolutely. What is your hairstyle budget?';
       }
 
-      return 'I can help you find styles within your ${preferences.budget} budget. Tell me whether you prefer braids, twists, cornrows, or another style.';
+      return 'I can help you find styles within your ${preferences.budget} budget.';
     }
 
     if (lower.contains('available') ||
@@ -1957,12 +1907,8 @@ Which one would you like to see?
       return 'Here are the next open appointment times:\n\n${slots.join('\n')}';
     }
 
-    return 'I can help with Faith Hair Style services, hairstyles, prices, colors, real salon photos, availability, and booking. What hairstyle are you interested in?';
+    return 'I can help with Faith Hair Style services, hairstyles, prices, colors, real salon photos, availability, and booking.';
   }
-
-  // ==========================================
-  // SEND MESSAGE
-  // ==========================================
 
   Future<void> sendMessage(String text) async {
     final originalText = text.trim();
@@ -1991,8 +1937,6 @@ Which one would you like to see?
 
     _isLoading = true;
 
-    // Prevent an old service's booking button from leaking into
-    // an unrelated new conversation turn.
     if (_isBookingIntent(cleanText)) {
       _showBookingButton = lastSuggestedServiceName != null;
     } else {
@@ -2010,7 +1954,6 @@ Which one would you like to see?
             isUser: false,
           ),
         );
-
         return;
       }
 
@@ -2020,7 +1963,6 @@ Which one would you like to see?
 
       if (_isImageRequest(cleanText)) {
         final handled = _handleImageRequestLocally(cleanText);
-
         if (handled) return;
       }
 
@@ -2035,13 +1977,11 @@ Which one would you like to see?
                 : 'Here are the matching styles from our live salon catalog.',
             includeMissingNote: true,
           );
-
           return;
         }
       }
 
       final reply = await _fetchAIResponse(cleanText);
-
       final cleanedReply = _removeRepeatedGreeting(reply);
 
       _processAIResponse(
@@ -2050,7 +1990,6 @@ Which one would you like to see?
       );
     } catch (error, stackTrace) {
       debugPrint('Faith AI request failed: $error');
-
       debugPrintStack(stackTrace: stackTrace);
 
       if (_isSalonIntent(cleanText)) {
@@ -2064,7 +2003,7 @@ Which one would you like to see?
         _messages.add(
           const ChatMessage(
             text:
-                'Faith AI is taking longer than expected. You can still ask me about a hairstyle, price, salon photo, color, availability, or booking.',
+                'Faith AI could not reach the Railway AI service. Please try again.',
             isUser: false,
           ),
         );
@@ -2095,10 +2034,6 @@ Which one would you like to see?
 
     return greetings.contains(value);
   }
-
-  // ==========================================
-  // IMAGE REQUESTS
-  // ==========================================
 
   bool _isDirectServicePreviewRequest(String text) {
     final lower = text.toLowerCase();
@@ -2160,7 +2095,6 @@ Which one would you like to see?
             isUser: false,
           ),
         );
-
         return true;
       }
 
@@ -2171,7 +2105,6 @@ Which one would you like to see?
               'Here are the real salon photos currently available in our service catalog.',
           includeMissingNote: true,
         );
-
         return true;
       }
 
@@ -2182,7 +2115,6 @@ Which one would you like to see?
           isUser: false,
         ),
       );
-
       return true;
     }
 
@@ -2294,7 +2226,6 @@ Which one would you like to see?
     if (output.isEmpty) {
       for (final rememberedName in _lastMentionedServiceNames) {
         final service = _findServiceByExactName(rememberedName);
-
         if (service != null) add(service);
       }
     }
@@ -2372,17 +2303,12 @@ Which one would you like to see?
     return cleaned.trimLeft();
   }
 
-  // ==========================================
-  // PROCESS AI RESPONSE
-  // ==========================================
-
   void _processAIResponse(
     String userText,
     String aiText,
   ) {
     if (_isSalonIntent(userText) &&
         _looksLikeWrongStatisticsResponse(aiText)) {
-      // Clear stale recommendation state.
       _showBookingButton = false;
       lastSuggestedServiceName = null;
       _lastMentionedServiceNames.clear();
@@ -2393,7 +2319,6 @@ Which one would you like to see?
           isUser: false,
         ),
       );
-
       return;
     }
 
@@ -2446,7 +2371,6 @@ Which one would you like to see?
         .map(
           (service) {
             final name = _serviceName(service);
-
             final imageUrl =
                 (service['image_url'] ?? '').toString().trim();
 
@@ -2484,7 +2408,6 @@ Which one would you like to see?
               .where((name) => name.isNotEmpty),
         );
 
-      // Current response actually contains a real service.
       _showBookingButton = true;
     }
 
@@ -2590,7 +2513,7 @@ Which one would you like to see?
   }
 
   // ============================================================
-  // BACKEND REQUEST
+  // RAILWAY /chat REQUEST
   // ============================================================
 
   Future<String> _fetchAIResponse(String customerMessage) async {
@@ -2602,6 +2525,9 @@ Which one would you like to see?
       normalizedMessage,
     );
 
+    debugPrint('Faith AI -> Railway /chat');
+    debugPrint('Customer: $normalizedMessage');
+
     final response = await http
         .post(
           Uri.parse(_aiEndpoint),
@@ -2609,27 +2535,34 @@ Which one would you like to see?
             'Content-Type': 'application/json',
             'Accept': 'application/json',
           },
-          body: jsonEncode(
-            {
-              'message': systemPrompt,
-              'user_message': normalizedMessage,
-
-              // Faith-specific routing information.
-              'app': 'faith_hairstyle',
-              'assistant': 'faith_ai',
-              'domain': 'hair_salon',
-              'mode': 'salon_copilot',
-            },
-          ),
+          body: jsonEncode({
+            'message': systemPrompt,
+            'user_message': normalizedMessage,
+            'app': 'faith_hairstyle',
+            'assistant': 'faith_ai',
+            'domain': 'hair_salon',
+            'mode': 'salon_copilot',
+            'safe_mode': true,
+            'advanced_mode': true,
+          }),
         )
         .timeout(
-          const Duration(seconds: 80),
+          const Duration(seconds: 45),
         );
+
+    debugPrint(
+      'Faith AI Railway status: ${response.statusCode}',
+    );
+
+    debugPrint(
+      'Faith AI Railway body: ${response.body}',
+    );
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
       throw Exception(
-        'Faith AI server returned ${response.statusCode}: ${response.body}',
+        'Railway /chat returned '
+        '${response.statusCode}: ${response.body}',
       );
     }
 
@@ -2641,36 +2574,31 @@ Which one would you like to see?
       final plain = response.body.trim();
 
       if (plain.isEmpty) {
-        throw Exception('Faith AI returned an empty response.');
+        throw Exception(
+          'Railway returned an empty response.',
+        );
       }
 
       if (_isSalonIntent(normalizedMessage) &&
           _looksLikeWrongStatisticsResponse(plain)) {
-        debugPrint(
-          'Blocked incorrect statistics response.',
-        );
-
         return _salonFallback(normalizedMessage);
       }
 
       return plain;
     }
 
-    var answer = _extractAIText(decoded);
+    final answer = _extractAIText(decoded);
 
     if (answer.isEmpty) {
       throw Exception(
-        'Faith AI returned an unreadable response.',
+        'Railway /chat returned no readable AI reply. '
+        'Body: ${response.body}',
       );
     }
 
     if (_isSalonIntent(normalizedMessage) &&
         _looksLikeWrongStatisticsResponse(answer)) {
-      debugPrint(
-        'Faith AI blocked statistics response for salon request.',
-      );
-
-      answer = _salonFallback(normalizedMessage);
+      return _salonFallback(normalizedMessage);
     }
 
     return answer;
@@ -2722,10 +2650,6 @@ Which one would you like to see?
     return '';
   }
 
-  // ==========================================
-  // BOOKING
-  // ==========================================
-
   Map<String, dynamic>? getSuggestedService() {
     if (lastSuggestedServiceName == null) return null;
 
@@ -2763,6 +2687,10 @@ Which one would you like to see?
       'hairstyle',
       'braid',
       'braids',
+      'kid',
+      'kids',
+      'child',
+      'children',
       'twist',
       'twists',
       'cornrow',
@@ -2783,10 +2711,6 @@ Which one would you like to see?
 
     return terms.any(lower.contains);
   }
-
-  // ==========================================
-  // SERVICE MATCHING
-  // ==========================================
 
   List<Map<String, dynamic>> _findServicesFromText(String text) {
     final lower = _normalizeServiceLookup(
@@ -2840,13 +2764,20 @@ Which one would you like to see?
         'fulani braid',
         'fulani braids',
       ],
+
+      // FIXED: bare kids/child words now resolve to Kids Styling.
       'Kids Styling': [
+        'kids',
+        'kid',
+        'children',
+        'child',
         'kids styling',
         'kid styling',
         'children styling',
         'child styling',
         'kids hair',
       ],
+
       'Pony tail': [
         'pony tail',
         'ponytail',
@@ -3076,6 +3007,8 @@ class LocalEmbeddingIndex {
       'twist',
       'loc',
       'cornrow',
+      'kid',
+      'child',
       'hair',
       'budget',
       'price',
@@ -3211,26 +3144,21 @@ class LocalEmbeddingIndex {
         case 'briad':
           expanded.add('braid');
           break;
-
         case 'braids':
           expanded.add('braid');
           break;
-
         case 'twists':
           expanded.add('twist');
           break;
-
         case 'kids':
         case 'child':
         case 'children':
           expanded.add('kid');
           break;
-
         case 'pictures':
         case 'photos':
           expanded.add('image');
           break;
-
         case 'booking':
         case 'appointment':
           expanded.add('book');
@@ -3440,7 +3368,7 @@ Answer the customer's question using the retrieved LIVE salon knowledge below.
 Help the customer choose a listed hairstyle, compare starting prices and durations, view real salon images, understand hair colors, and move toward booking when ready.
 
 SALON-FIRST ROUTING
-- Interpret short messages such as "braid", "braids", "briad", "hair", "knotless", "twist", "cornrows", "boho", "fulani", "locs", and similar wording as salon hairstyle requests.
+- Interpret short messages such as "braid", "braids", "briad", "hair", "kids", "kid", "children", "knotless", "twist", "cornrows", "boho", "fulani", "locs", and similar wording as salon hairstyle requests.
 - Correct obvious hairstyle spelling mistakes using the salon context.
 - A short or misspelled hairstyle word is NOT a request for mathematical analysis.
 - A number in a salon conversation normally represents a price, budget, hair-color code, braid size, length, date, duration, or appointment time.
@@ -3458,7 +3386,6 @@ STRICT LIVE-DATA RULES
 - Recommend ONLY service names that appear in the retrieved/live catalog data.
 - NEVER invent a salon service.
 - NEVER combine a category with a service name to create a new service name.
-- If the live record is "Cornrows", say "Cornrows", not "Natural Cornrows".
 
 SERVICE MARKERS
 Whenever you recommend or discuss a specific service, write its EXACT live service name and append:
@@ -3470,16 +3397,11 @@ IMAGES
 - Never invent a style image.
 - Never invent an image URL.
 - Never output fake Markdown images.
-- Never say "Image 1", "Image 2", "Photo 1", or similar placeholders.
 - The Flutter app renders real services.image_url values.
-- If the customer requests an image, identify the exact live service and let the app display the image.
 
 PRICES
 - Always say "starting at" when quoting service prices.
-- Never invent a price.
-- Never invent a discount.
-- Never invent a deposit.
-- Never invent a payment method or salon policy.
+- Never invent a price, discount, deposit, payment method, or salon policy.
 
 AVAILABILITY
 - An OPEN APPOINTMENT SLOT represents availability.
@@ -3487,11 +3409,7 @@ AVAILABILITY
 - Never invent appointment availability.
 
 PRIVACY
-- Never reveal another customer's name.
-- Never reveal another customer's phone number.
-- Never reveal another customer's email.
-- Never reveal another customer's notes or messages.
-- Never reveal owner-only/private information.
+- Never reveal another customer's private information.
 
 MISSING INFORMATION
 If the requested fact is not present in the retrieved live salon knowledge, say that you do not have that information.
@@ -3503,9 +3421,7 @@ When the customer is ready to book a known service, tell them to tap the booking
 CONVERSATION STYLE
 - Be warm, concise, polished, and direct.
 - Ask at most one important follow-up question at a time.
-- Do not repeatedly greet the customer.
-- Do not repeatedly introduce yourself.
-- Focus on helping the customer choose and book a hairstyle.
+- Do not repeatedly greet or introduce yourself.
 
 CUSTOMER PREFERENCES
 ${controller.preferences.toContextString()}
