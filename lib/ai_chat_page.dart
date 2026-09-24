@@ -17,7 +17,8 @@ import 'booking_page.dart';
 // - Uses current Railway production endpoint
 // - Voice input + TTS output
 // - Live Supabase services/colors for UI + booking
-// - Backend remains primary RAG/reasoning engine
+// - Uses exactly one AI model: meta-llama/Llama-3.1-8B-Instruct
+// - One-model AI path only
 // - Displays real service images returned/matched from Supabase
 // - Preserves conversation history and customer preferences
 // ============================================================
@@ -1148,7 +1149,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 }
 
 // ============================================================
-// 12. CONTROLLER
+// 12. CONTROLLER — ONE PRIMARY MODEL + NATURAL VOICE
 // ============================================================
 
 class FaithCopilotController extends ChangeNotifier {
@@ -1172,6 +1173,10 @@ class FaithCopilotController extends ChangeNotifier {
       'https://theyoungshallgrow-api-production.up.railway.app';
 
   static const String _aiEndpoint = '$_apiBase/chat';
+
+  // ONE MODEL ONLY. The backend should honor this model policy.
+  static const String _primaryModel =
+      'meta-llama/Llama-3.1-8B-Instruct';
 
   final SupabaseClient _supabase = Supabase.instance.client;
   final FlutterTts _tts = FlutterTts();
@@ -1204,7 +1209,7 @@ class FaithCopilotController extends ChangeNotifier {
   DateTime? _lastSendAt;
 
   // ==========================================================
-  // TTS / FEMALE VOICE
+  // TTS / NATURAL ENGLISH VOICE
   // ==========================================================
 
   Future<void> initializeVoice() async {
@@ -1212,51 +1217,92 @@ class FaithCopilotController extends ChangeNotifier {
 
     try {
       await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(.48);
-      await _tts.setPitch(1.05);
+      await _tts.setSpeechRate(.46);
+      await _tts.setPitch(1.0);
       await _tts.setVolume(1.0);
 
+      // Makes long answers sound more continuous when supported.
       try {
-        final dynamic voices = await _tts.getVoices;
+        await _tts.awaitSpeakCompletion(true);
+      } catch (_) {}
 
-        if (voices is List) {
-          final candidates = voices.where((voice) {
-            if (voice is! Map) return false;
+      try {
+        final dynamic rawVoices = await _tts.getVoices;
 
-            final name =
-                (voice['name'] ?? '').toString().toLowerCase();
-            final locale =
-                (voice['locale'] ?? '').toString().toLowerCase();
+        if (rawVoices is List && rawVoices.isNotEmpty) {
+          final voices = rawVoices
+              .whereType<Map>()
+              .map((voice) => Map<dynamic, dynamic>.from(voice))
+              .where((voice) {
+                final locale =
+                    (voice['locale'] ?? '').toString().toLowerCase();
+                return locale.startsWith('en');
+              })
+              .toList();
 
-            final english = locale.startsWith('en');
-            final female = name.contains('female') ||
-                name.contains('jenny') ||
-                name.contains('samantha') ||
-                name.contains('aria') ||
-                name.contains('zira') ||
-                name.contains('ava') ||
-                name.contains('susan') ||
-                name.contains('victoria');
+          voices.sort((a, b) => _voiceScore(b).compareTo(_voiceScore(a)));
 
-            return english && female;
-          }).toList();
+          if (voices.isNotEmpty) {
+            final selected = voices.first;
+            final name = (selected['name'] ?? '').toString();
+            final locale = (selected['locale'] ?? 'en-US').toString();
 
-          if (candidates.isNotEmpty) {
-            final selected = candidates.first;
-            await _tts.setVoice({
-              'name': selected['name'].toString(),
-              'locale': selected['locale'].toString(),
-            });
+            if (name.isNotEmpty) {
+              await _tts.setVoice({
+                'name': name,
+                'locale': locale,
+              });
+            }
           }
         }
       } catch (_) {
-        // Keep the device/browser default voice.
+        // If the platform does not expose voices, use its normal English voice.
       }
 
       _voiceInitialized = true;
     } catch (_) {
       _voiceInitialized = false;
     }
+  }
+
+  int _voiceScore(Map<dynamic, dynamic> voice) {
+    final name = (voice['name'] ?? '').toString().toLowerCase();
+    final locale = (voice['locale'] ?? '').toString().toLowerCase();
+
+    var score = 0;
+
+    if (locale == 'en-us' || locale == 'en_us') score += 60;
+    if (locale.startsWith('en-us') || locale.startsWith('en_us')) score += 35;
+    if (locale.startsWith('en')) score += 15;
+
+    // Prefer names commonly used by high-quality natural/neural voices.
+    for (final word in [
+      'natural',
+      'neural',
+      'premium',
+      'enhanced',
+      'online',
+      'wavenet',
+      'jenny',
+      'aria',
+      'ava',
+      'samantha',
+      'zira',
+      'susan',
+      'victoria',
+      'karen',
+      'moira',
+      'female',
+    ]) {
+      if (name.contains(word)) score += 20;
+    }
+
+    // De-prioritize obviously basic/legacy synthesizers when alternatives exist.
+    for (final word in ['compact', 'legacy', 'espeak']) {
+      if (name.contains(word)) score -= 30;
+    }
+
+    return score;
   }
 
   Future<void> toggleVoice() async {
@@ -1286,21 +1332,58 @@ class FaithCopilotController extends ChangeNotifier {
     try {
       await initializeVoice();
       await _tts.stop();
-      await _tts.speak(cleaned);
+
+      for (final chunk in _speechChunks(cleaned)) {
+        if (!_voiceEnabled) break;
+        await _tts.speak(chunk);
+      }
     } catch (_) {}
+  }
+
+  List<String> _speechChunks(String text, {int maxChars = 1200}) {
+    if (text.length <= maxChars) return [text];
+
+    final words = text.split(RegExp(r'\s+'));
+    final chunks = <String>[];
+    var current = StringBuffer();
+
+    for (final word in words) {
+      if (word.isEmpty) continue;
+
+      if (current.isNotEmpty && current.length + word.length + 1 > maxChars) {
+        chunks.add(current.toString().trim());
+        current = StringBuffer();
+      }
+
+      if (current.isNotEmpty) current.write(' ');
+      current.write(word);
+    }
+
+    if (current.isNotEmpty) {
+      chunks.add(current.toString().trim());
+    }
+
+    return chunks.where((chunk) => chunk.isNotEmpty).toList();
   }
 
   String _textForSpeech(String text) {
     return text
-        .replaceAll(
-          RegExp(r'https?:\/\/\S+', caseSensitive: false),
-          '',
+        .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
+        .replaceAllMapped(
+          RegExp(r'`([^`]*)`'),
+          (match) => match.group(1) ?? '',
+        )
+        .replaceAll(RegExp(r'https?:\/\/\S+', caseSensitive: false), '')
+        .replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'), '')
+        .replaceAllMapped(
+          RegExp(r'\[([^\]]+)\]\([^)]*\)'),
+          (match) => match.group(1) ?? '',
         )
         .replaceAll('**', '')
-        .replaceAll(
-          RegExp(r'^[•\-]\s*', multiLine: true),
-          '',
-        )
+        .replaceAll('__', '')
+        .replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'^[•*\-]\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
 
@@ -1376,14 +1459,15 @@ class FaithCopilotController extends ChangeNotifier {
       );
 
       await _speak(reply);
-    } catch (_) {
-      final fallback = _localFallback(cleanText);
+    } catch (error) {
+      const message =
+          'I could not reach the Faithi AI service right now. Please try again.';
 
       _messages.add(
-        ChatMessage(text: fallback, isUser: false),
+        const ChatMessage(text: message, isUser: false),
       );
 
-      await _speak(fallback);
+      await _speak(message);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -1415,6 +1499,12 @@ class FaithCopilotController extends ChangeNotifier {
     final body = {
       'message': customerMessage,
       'history': history,
+
+      // ONE PRIMARY MODEL ONLY.
+      'model': _primaryModel,
+      'primary_model': _primaryModel,
+      'single_model_only': true,
+
       'domain': 'hair_salon',
       'page': 'ai_chat',
       'safe_mode': true,
@@ -1423,6 +1513,24 @@ class FaithCopilotController extends ChangeNotifier {
         'app': 'faith_hairstyle',
         'assistant': 'faithi',
         'backend_generation': 'v4.4+',
+        'model_policy': {
+          'primary_model': _primaryModel,
+          'single_model_only': true,
+        },
+        'response_style': {
+          'natural_conversation': true,
+          'chatgpt_like': true,
+          'context_aware': true,
+          'warm_and_professional': true,
+          'answer_directly': true,
+          'avoid_repeated_greetings': true,
+          'avoid_robotic_language': true,
+          'avoid_unnecessary_disclaimers': true,
+          'ask_follow_up_only_when_needed': true,
+          'use_conversation_history': true,
+          'use_live_salon_data_for_business_facts': true,
+          'do_not_invent_prices_services_colors_or_availability': true,
+        },
         'customer_preferences': preferences.toMap(),
         'frontend_capabilities': {
           'service_images': true,
@@ -1804,29 +1912,6 @@ class FaithCopilotController extends ChangeNotifier {
         lower.contains('open time');
   }
 
-  String _localFallback(String customerMessage) {
-    final lower = customerMessage.toLowerCase();
-
-    if (_isColorIntent(customerMessage)) {
-      if (hairColors.isEmpty) {
-        return 'I could not load the live hair colors right now. Please try again.';
-      }
-
-      final colors = hairColors
-          .take(12)
-          .map((row) => '${row['code']} — ${row['name']}')
-          .join(', ');
-
-      return 'Available colors include: $colors.';
-    }
-
-    if (lower.contains('price') || lower.contains('budget')) {
-      return 'I can help you choose a Faith Hairstyle service within your budget. What is your budget?';
-    }
-
-    return 'I’m having trouble reaching the Faithi reasoning service right now. '
-        'I can still help you explore Faith Hairstyle services, colors, pictures, and booking.';
-  }
 
   void addSystemMessage(String text) {
     _messages.add(ChatMessage(text: text, isUser: false));
