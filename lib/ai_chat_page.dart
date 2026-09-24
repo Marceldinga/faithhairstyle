@@ -1,4 +1,5 @@
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -1212,51 +1213,65 @@ class FaithCopilotController extends ChangeNotifier {
   // TTS / NATURAL ENGLISH VOICE
   // ==========================================================
 
+
   Future<void> initializeVoice() async {
     if (_voiceInitialized) return;
 
     try {
       await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(.46);
-      await _tts.setPitch(1.0);
+
+      // Faster, conversational pace. 0.46 was noticeably slow.
+      await _tts.setSpeechRate(.60);
+      await _tts.setPitch(1.02);
       await _tts.setVolume(1.0);
 
-      // Makes long answers sound more continuous when supported.
       try {
         await _tts.awaitSpeakCompletion(true);
       } catch (_) {}
 
-      try {
-        final dynamic rawVoices = await _tts.getVoices;
+      // Browser/device voice lists can arrive a moment after page load.
+      // Retry a few times before accepting the platform default.
+      List<Map<dynamic, dynamic>> voices = [];
 
-        if (rawVoices is List && rawVoices.isNotEmpty) {
-          final voices = rawVoices
-              .whereType<Map>()
-              .map((voice) => Map<dynamic, dynamic>.from(voice))
-              .where((voice) {
-                final locale =
-                    (voice['locale'] ?? '').toString().toLowerCase();
-                return locale.startsWith('en');
-              })
-              .toList();
+      for (int attempt = 0; attempt < 3 && voices.isEmpty; attempt++) {
+        try {
+          final dynamic rawVoices = await _tts.getVoices;
 
-          voices.sort((a, b) => _voiceScore(b).compareTo(_voiceScore(a)));
-
-          if (voices.isNotEmpty) {
-            final selected = voices.first;
-            final name = (selected['name'] ?? '').toString();
-            final locale = (selected['locale'] ?? 'en-US').toString();
-
-            if (name.isNotEmpty) {
-              await _tts.setVoice({
-                'name': name,
-                'locale': locale,
-              });
-            }
+          if (rawVoices is List) {
+            voices = rawVoices
+                .whereType<Map>()
+                .map((voice) => Map<dynamic, dynamic>.from(voice))
+                .where((voice) {
+                  final locale =
+                      (voice['locale'] ?? '').toString().toLowerCase();
+                  return locale.startsWith('en');
+                })
+                .toList();
           }
+        } catch (_) {}
+
+        if (voices.isEmpty && attempt < 2) {
+          await Future<void>.delayed(
+            Duration(milliseconds: 250 + (attempt * 200)),
+          );
         }
-      } catch (_) {
-        // If the platform does not expose voices, use its normal English voice.
+      }
+
+      if (voices.isNotEmpty) {
+        voices.sort((a, b) => _voiceScore(b).compareTo(_voiceScore(a)));
+
+        final selected = voices.first;
+        final name = (selected['name'] ?? '').toString().trim();
+        final locale = (selected['locale'] ?? 'en-US').toString().trim();
+
+        if (name.isNotEmpty) {
+          try {
+            await _tts.setVoice({
+              'name': name,
+              'locale': locale.isEmpty ? 'en-US' : locale,
+            });
+          } catch (_) {}
+        }
       }
 
       _voiceInitialized = true;
@@ -1271,11 +1286,11 @@ class FaithCopilotController extends ChangeNotifier {
 
     var score = 0;
 
-    if (locale == 'en-us' || locale == 'en_us') score += 60;
-    if (locale.startsWith('en-us') || locale.startsWith('en_us')) score += 35;
-    if (locale.startsWith('en')) score += 15;
+    if (locale == 'en-us' || locale == 'en_us') score += 80;
+    if (locale.startsWith('en-us') || locale.startsWith('en_us')) score += 50;
+    if (locale.startsWith('en')) score += 20;
 
-    // Prefer names commonly used by high-quality natural/neural voices.
+    // Strong preference for natural/neural/premium engines.
     for (final word in [
       'natural',
       'neural',
@@ -1283,9 +1298,17 @@ class FaithCopilotController extends ChangeNotifier {
       'enhanced',
       'online',
       'wavenet',
-      'jenny',
+    ]) {
+      if (name.contains(word)) score += 35;
+    }
+
+    // Strong preference for high-quality feminine English voices.
+    for (final word in [
       'aria',
+      'jenny',
       'ava',
+      'emma',
+      'sonia',
       'samantha',
       'zira',
       'susan',
@@ -1294,12 +1317,31 @@ class FaithCopilotController extends ChangeNotifier {
       'moira',
       'female',
     ]) {
-      if (name.contains(word)) score += 20;
+      if (name.contains(word)) score += 120;
     }
 
-    // De-prioritize obviously basic/legacy synthesizers when alternatives exist.
+    // Avoid common masculine voices when a feminine alternative exists.
+    for (final word in [
+      'david',
+      'mark',
+      'guy',
+      'ryan',
+      'christopher',
+      'eric',
+      'brian',
+      'andrew',
+      'roger',
+      'steffan',
+      'george',
+      'james',
+      'daniel',
+      'male',
+    ]) {
+      if (name.contains(word)) score -= 140;
+    }
+
     for (final word in ['compact', 'legacy', 'espeak']) {
-      if (name.contains(word)) score -= 30;
+      if (name.contains(word)) score -= 80;
     }
 
     return score;
@@ -1340,30 +1382,55 @@ class FaithCopilotController extends ChangeNotifier {
     } catch (_) {}
   }
 
-  List<String> _speechChunks(String text, {int maxChars = 1200}) {
-    if (text.length <= maxChars) return [text];
+  List<String> _speechChunks(String text, {int maxChars = 260}) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.isEmpty) return [];
+    if (normalized.length <= maxChars) return [normalized];
 
-    final words = text.split(RegExp(r'\s+'));
+    final sentences = normalized
+        .split(RegExp(r'(?<=[.!?])\s+'))
+        .where((part) => part.trim().isNotEmpty)
+        .toList();
+
     final chunks = <String>[];
     var current = StringBuffer();
 
-    for (final word in words) {
-      if (word.isEmpty) continue;
+    void flush() {
+      final value = current.toString().trim();
+      if (value.isNotEmpty) chunks.add(value);
+      current = StringBuffer();
+    }
 
-      if (current.isNotEmpty && current.length + word.length + 1 > maxChars) {
-        chunks.add(current.toString().trim());
-        current = StringBuffer();
+    for (final sentence in sentences) {
+      final s = sentence.trim();
+
+      if (s.length > maxChars) {
+        flush();
+
+        final words = s.split(RegExp(r'\s+'));
+        for (final word in words) {
+          if (current.isNotEmpty &&
+              current.length + word.length + 1 > maxChars) {
+            flush();
+          }
+          if (current.isNotEmpty) current.write(' ');
+          current.write(word);
+        }
+        flush();
+        continue;
+      }
+
+      if (current.isNotEmpty &&
+          current.length + s.length + 1 > maxChars) {
+        flush();
       }
 
       if (current.isNotEmpty) current.write(' ');
-      current.write(word);
+      current.write(s);
     }
 
-    if (current.isNotEmpty) {
-      chunks.add(current.toString().trim());
-    }
-
-    return chunks.where((chunk) => chunk.isNotEmpty).toList();
+    flush();
+    return chunks;
   }
 
   String _textForSpeech(String text) {
@@ -1458,7 +1525,14 @@ class FaithCopilotController extends ChangeNotifier {
         meta: result.meta,
       );
 
-      await _speak(reply);
+      // Unlock the UI as soon as text is ready.
+      // Voice playback continues independently and no longer keeps
+      // the typing indicator/input disabled.
+      _isLoading = false;
+      notifyListeners();
+
+      unawaited(_speak(reply));
+      return;
     } catch (error) {
       const message =
           'I could not reach the Faithi AI service right now. Please try again.';
@@ -1467,10 +1541,11 @@ class FaithCopilotController extends ChangeNotifier {
         const ChatMessage(text: message, isUser: false),
       );
 
-      await _speak(message);
-    } finally {
       _isLoading = false;
       notifyListeners();
+
+      unawaited(_speak(message));
+      return;
     }
   }
 
@@ -1483,8 +1558,8 @@ class FaithCopilotController extends ChangeNotifier {
         ? _messages.sublist(0, _messages.length - 1)
         : <ChatMessage>[];
 
-    final recentHistory = historySource.length > 12
-        ? historySource.sublist(historySource.length - 12)
+    final recentHistory = historySource.length > 8
+        ? historySource.sublist(historySource.length - 8)
         : historySource;
 
     final history = recentHistory
@@ -1550,7 +1625,7 @@ class FaithCopilotController extends ChangeNotifier {
           },
           body: jsonEncode(body),
         )
-        .timeout(const Duration(seconds: 45));
+        .timeout(const Duration(seconds: 25));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
