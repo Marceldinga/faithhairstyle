@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -243,7 +243,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       _controller.loadSalonData();
     }
 
-    _controller.initializeVoice();
+    unawaited(_controller.warmUp());
   }
 
   @override
@@ -1174,13 +1174,15 @@ class FaithCopilotController extends ChangeNotifier {
       'https://theyoungshallgrow-api-production.up.railway.app';
 
   static const String _aiEndpoint = '$_apiBase/chat';
+  static const String _ttsEndpoint = '$_apiBase/tts';
 
   // ONE MODEL ONLY. The backend should honor this model policy.
   static const String _primaryModel =
       'meta-llama/Llama-3.1-8B-Instruct';
 
   final SupabaseClient _supabase = Supabase.instance.client;
-  final FlutterTts _tts = FlutterTts();
+  final http.Client _httpClient = http.Client();
+  final AudioPlayer _voicePlayer = AudioPlayer();
   final List<ChatMessage> _messages = [];
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
@@ -1191,6 +1193,7 @@ class FaithCopilotController extends ChangeNotifier {
 
   bool _isLoadingData = false;
   bool get isLoadingData => _isLoadingData;
+  bool _salonDataLoaded = false;
 
   bool _showBookingButton = false;
   bool get showBookingButton => _showBookingButton;
@@ -1198,170 +1201,44 @@ class FaithCopilotController extends ChangeNotifier {
   bool _voiceEnabled = true;
   bool get voiceEnabled => _voiceEnabled;
 
-  bool _voiceInitialized = false;
+  int _voiceRequestId = 0;
 
   final CustomerPreferences preferences = CustomerPreferences();
 
   List<Map<String, dynamic>> services = [];
   List<Map<String, dynamic>> hairColors = [];
+  List<Map<String, dynamic>> availabilitySlots = [];
 
   String? lastSuggestedServiceName;
   String? lastSuggestedServiceId;
   DateTime? _lastSendAt;
 
   // ==========================================================
-  // TTS / NATURAL ENGLISH VOICE
+  // SERVER NEURAL FEMALE VOICE
   // ==========================================================
 
-
-  Future<void> initializeVoice() async {
-    if (_voiceInitialized) return;
-
+  Future<void> warmUp() async {
+    // Wake Railway early so the first real customer question is not paying
+    // the full cold-start cost. The root endpoint is intentionally light.
     try {
-      await _tts.setLanguage('en-US');
-
-      // Faster, conversational pace. 0.46 was noticeably slow.
-      await _tts.setSpeechRate(.60);
-      await _tts.setPitch(1.02);
-      await _tts.setVolume(1.0);
-
-      try {
-        await _tts.awaitSpeakCompletion(true);
-      } catch (_) {}
-
-      // Browser/device voice lists can arrive a moment after page load.
-      // Retry a few times before accepting the platform default.
-      List<Map<dynamic, dynamic>> voices = [];
-
-      for (int attempt = 0; attempt < 3 && voices.isEmpty; attempt++) {
-        try {
-          final dynamic rawVoices = await _tts.getVoices;
-
-          if (rawVoices is List) {
-            voices = rawVoices
-                .whereType<Map>()
-                .map((voice) => Map<dynamic, dynamic>.from(voice))
-                .where((voice) {
-                  final locale =
-                      (voice['locale'] ?? '').toString().toLowerCase();
-                  return locale.startsWith('en');
-                })
-                .toList();
-          }
-        } catch (_) {}
-
-        if (voices.isEmpty && attempt < 2) {
-          await Future<void>.delayed(
-            Duration(milliseconds: 250 + (attempt * 200)),
-          );
-        }
-      }
-
-      if (voices.isNotEmpty) {
-        voices.sort((a, b) => _voiceScore(b).compareTo(_voiceScore(a)));
-
-        final selected = voices.first;
-        final name = (selected['name'] ?? '').toString().trim();
-        final locale = (selected['locale'] ?? 'en-US').toString().trim();
-
-        if (name.isNotEmpty) {
-          try {
-            await _tts.setVoice({
-              'name': name,
-              'locale': locale.isEmpty ? 'en-US' : locale,
-            });
-          } catch (_) {}
-        }
-      }
-
-      _voiceInitialized = true;
-    } catch (_) {
-      _voiceInitialized = false;
-    }
-  }
-
-  int _voiceScore(Map<dynamic, dynamic> voice) {
-    final name = (voice['name'] ?? '').toString().toLowerCase();
-    final locale = (voice['locale'] ?? '').toString().toLowerCase();
-
-    var score = 0;
-
-    if (locale == 'en-us' || locale == 'en_us') score += 80;
-    if (locale.startsWith('en-us') || locale.startsWith('en_us')) score += 50;
-    if (locale.startsWith('en')) score += 20;
-
-    // Strong preference for natural/neural/premium engines.
-    for (final word in [
-      'natural',
-      'neural',
-      'premium',
-      'enhanced',
-      'online',
-      'wavenet',
-    ]) {
-      if (name.contains(word)) score += 35;
-    }
-
-    // Strong preference for high-quality feminine English voices.
-    for (final word in [
-      'aria',
-      'jenny',
-      'ava',
-      'emma',
-      'sonia',
-      'samantha',
-      'zira',
-      'susan',
-      'victoria',
-      'karen',
-      'moira',
-      'female',
-    ]) {
-      if (name.contains(word)) score += 120;
-    }
-
-    // Avoid common masculine voices when a feminine alternative exists.
-    for (final word in [
-      'david',
-      'mark',
-      'guy',
-      'ryan',
-      'christopher',
-      'eric',
-      'brian',
-      'andrew',
-      'roger',
-      'steffan',
-      'george',
-      'james',
-      'daniel',
-      'male',
-    ]) {
-      if (name.contains(word)) score -= 140;
-    }
-
-    for (final word in ['compact', 'legacy', 'espeak']) {
-      if (name.contains(word)) score -= 80;
-    }
-
-    return score;
+      await _httpClient
+          .get(Uri.parse(_apiBase))
+          .timeout(const Duration(seconds: 4));
+    } catch (_) {}
   }
 
   Future<void> toggleVoice() async {
     _voiceEnabled = !_voiceEnabled;
-
     if (!_voiceEnabled) {
-      await _tts.stop();
-    } else {
-      await initializeVoice();
+      await stopSpeaking();
     }
-
     notifyListeners();
   }
 
   Future<void> stopSpeaking() async {
+    _voiceRequestId++;
     try {
-      await _tts.stop();
+      await _voicePlayer.stop();
     } catch (_) {}
   }
 
@@ -1371,70 +1248,44 @@ class FaithCopilotController extends ChangeNotifier {
     final cleaned = _textForSpeech(text);
     if (cleaned.isEmpty) return;
 
+    // One request + one audio file avoids the pauses created by chunked
+    // browser/device TTS. The backend hard-pins a female neural voice.
+    final requestId = ++_voiceRequestId;
+
     try {
-      await initializeVoice();
-      await _tts.stop();
+      final response = await _httpClient
+          .post(
+            Uri.parse(_ttsEndpoint),
+            headers: const {
+              'Content-Type': 'application/json',
+              'Accept': 'audio/mpeg',
+            },
+            body: jsonEncode({
+              'text': cleaned,
+              'voice': 'en-US-AvaNeural',
+              'rate': '+18%',
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
 
-      for (final chunk in _speechChunks(cleaned)) {
-        if (!_voiceEnabled) break;
-        await _tts.speak(chunk);
+      if (!_voiceEnabled || requestId != _voiceRequestId) return;
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return;
       }
-    } catch (_) {}
-  }
 
-  List<String> _speechChunks(String text, {int maxChars = 260}) {
-    final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (normalized.isEmpty) return [];
-    if (normalized.length <= maxChars) return [normalized];
+      if (response.bodyBytes.isEmpty) return;
 
-    final sentences = normalized
-        .split(RegExp(r'(?<=[.!?])\s+'))
-        .where((part) => part.trim().isNotEmpty)
-        .toList();
-
-    final chunks = <String>[];
-    var current = StringBuffer();
-
-    void flush() {
-      final value = current.toString().trim();
-      if (value.isNotEmpty) chunks.add(value);
-      current = StringBuffer();
+      await _voicePlayer.stop();
+      if (!_voiceEnabled || requestId != _voiceRequestId) return;
+      await _voicePlayer.play(BytesSource(response.bodyBytes));
+    } catch (_) {
+      // Text chat must remain fully usable even if the voice network path fails.
     }
-
-    for (final sentence in sentences) {
-      final s = sentence.trim();
-
-      if (s.length > maxChars) {
-        flush();
-
-        final words = s.split(RegExp(r'\s+'));
-        for (final word in words) {
-          if (current.isNotEmpty &&
-              current.length + word.length + 1 > maxChars) {
-            flush();
-          }
-          if (current.isNotEmpty) current.write(' ');
-          current.write(word);
-        }
-        flush();
-        continue;
-      }
-
-      if (current.isNotEmpty &&
-          current.length + s.length + 1 > maxChars) {
-        flush();
-      }
-
-      if (current.isNotEmpty) current.write(' ');
-      current.write(s);
-    }
-
-    flush();
-    return chunks;
   }
 
   String _textForSpeech(String text) {
-    return text
+    var cleaned = text
         .replaceAll(RegExp(r'```[\s\S]*?```'), ' ')
         .replaceAllMapped(
           RegExp(r'`([^`]*)`'),
@@ -1452,6 +1303,18 @@ class FaithCopilotController extends ChangeNotifier {
         .replaceAll(RegExp(r'^[•*\-]\s*', multiLine: true), '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+
+    // Business assistant replies should stay short. This protects latency
+    // if a model ever returns an unexpectedly long response.
+    const maxSpeechChars = 1400;
+    if (cleaned.length > maxSpeechChars) {
+      var cut = cleaned.substring(0, maxSpeechChars);
+      final lastSpace = cut.lastIndexOf(' ');
+      if (lastSpace > 1000) cut = cut.substring(0, lastSpace);
+      cleaned = '$cut.';
+    }
+
+    return cleaned;
   }
 
   // ==========================================================
@@ -1459,35 +1322,323 @@ class FaithCopilotController extends ChangeNotifier {
   // ==========================================================
 
   Future<void> loadSalonData() async {
+    if (_isLoadingData) return;
+
     _isLoadingData = true;
     notifyListeners();
 
+    try {
+      final results = await Future.wait<List<Map<String, dynamic>>>([
+        _loadServices(),
+        _loadHairColors(),
+        _loadAvailability(),
+      ]);
+
+      services = results[0];
+      hairColors = results[1];
+      availabilitySlots = results[2];
+      _salonDataLoaded = true;
+    } finally {
+      _isLoadingData = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadServices() async {
     try {
       final rows = await _supabase
           .from('services')
           .select()
           .eq('is_active', true)
           .order('price', ascending: true);
-
-      services = List<Map<String, dynamic>>.from(rows);
+      return List<Map<String, dynamic>>.from(rows);
     } catch (_) {
-      services = [];
+      return <Map<String, dynamic>>[];
     }
+  }
 
+  Future<List<Map<String, dynamic>>> _loadHairColors() async {
     try {
       final rows = await _supabase
           .from('hair_colors')
           .select()
           .eq('is_active', true)
           .order('code', ascending: true);
-
-      hairColors = List<Map<String, dynamic>>.from(rows);
+      return List<Map<String, dynamic>>.from(rows);
     } catch (_) {
-      hairColors = [];
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadAvailability() async {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+
+    try {
+      final rows = await _supabase
+          .from('availability_slots')
+          .select()
+          .eq('is_available', true)
+          .gte('slot_date', today)
+          .order('slot_date', ascending: true)
+          .order('start_time', ascending: true)
+          .limit(24);
+      return List<Map<String, dynamic>>.from(rows);
+    } catch (_) {
+      try {
+        final rows = await _supabase
+            .from('availability_slots')
+            .select()
+            .gte('slot_date', today)
+            .order('slot_date', ascending: true)
+            .order('start_time', ascending: true)
+            .limit(24);
+        return List<Map<String, dynamic>>.from(rows)
+            .where(_availabilityRowLooksOpen)
+            .toList();
+      } catch (_) {
+        return <Map<String, dynamic>>[];
+      }
+    }
+  }
+
+  bool _availabilityRowLooksOpen(Map<String, dynamic> row) {
+    final active = row['is_active'];
+    if (active is bool && !active) return false;
+
+    final available = row['is_available'];
+    if (available is bool) return available;
+
+    final status = (row['status'] ?? '').toString().trim().toLowerCase();
+    if ({'booked', 'closed', 'taken', 'unavailable', 'cancelled', 'canceled'}
+        .contains(status)) {
+      return false;
     }
 
-    _isLoadingData = false;
-    notifyListeners();
+    return true;
+  }
+
+  bool _isAvailabilityIntent(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('availability') ||
+        lower.contains('available time') ||
+        lower.contains('open time') ||
+        lower.contains('open slot') ||
+        lower.contains('appointment time') ||
+        lower.contains('next available');
+  }
+
+  bool _isSimpleServiceListIntent(String text) {
+    final lower = text.toLowerCase().trim();
+    return lower == 'services' ||
+        lower == 'hairstyles' ||
+        lower == 'styles' ||
+        lower.contains('show me your services') ||
+        lower.contains('what services') ||
+        lower.contains('show hairstyles') ||
+        lower.contains('what hairstyles');
+  }
+
+  bool _isPriceIntent(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('price') ||
+        lower.contains('cost') ||
+        lower.contains('how much');
+  }
+
+  Map<String, dynamic>? _findBestLocalService(String text) {
+    final lower = text.toLowerCase();
+    Map<String, dynamic>? best;
+    var bestLength = 0;
+
+    for (final service in services) {
+      final name = (service['name'] ?? '').toString().trim();
+      if (name.isEmpty) continue;
+      final normalized = name.toLowerCase();
+      if (lower.contains(normalized) && normalized.length > bestLength) {
+        best = service;
+        bestLength = normalized.length;
+      }
+    }
+
+    if (best != null) return best;
+
+    const aliases = <String>[
+      'knotless',
+      'senegalese',
+      'boho',
+      'spring twist',
+      'twist',
+      'fulani',
+      'cornrow',
+      'loc',
+      'ponytail',
+      'kids',
+    ];
+
+    for (final alias in aliases) {
+      if (!lower.contains(alias)) continue;
+      for (final service in services) {
+        final name = (service['name'] ?? '').toString().toLowerCase();
+        if (name.contains(alias)) return service;
+      }
+    }
+
+    return null;
+  }
+
+  String _servicePriceLabel(Map<String, dynamic> service) {
+    for (final key in [
+      'price',
+      'starting_price',
+      'start_price',
+      'base_price',
+      'min_price',
+    ]) {
+      final value = service[key];
+      if (value == null || value.toString().trim().isEmpty) continue;
+      final money = _money(value);
+      if (money != null) return money;
+    }
+    return '';
+  }
+
+  String _prettyDate(dynamic value) {
+    final raw = (value ?? '').toString().trim();
+    if (raw.length < 10) return raw;
+    final parsed = DateTime.tryParse(raw.substring(0, 10));
+    if (parsed == null) return raw;
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${weekdays[parsed.weekday - 1]}, ${months[parsed.month - 1]} ${parsed.day}';
+  }
+
+  String _prettyTime(dynamic value) {
+    final raw = (value ?? '').toString().trim();
+    if (raw.isEmpty) return '';
+    final match = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(raw);
+    if (match == null) return raw;
+    var hour = int.tryParse(match.group(1) ?? '') ?? 0;
+    final minute = match.group(2) ?? '00';
+    final suffix = hour >= 12 ? 'PM' : 'AM';
+    hour %= 12;
+    if (hour == 0) hour = 12;
+    return '$hour:$minute $suffix';
+  }
+
+  Future<FaithiApiResult?> _tryFastLocalResponse(String customerMessage) async {
+    final lower = customerMessage.toLowerCase();
+
+    if (!_salonDataLoaded && !_isLoadingData) {
+      await loadSalonData();
+    }
+
+    if (_isColorIntent(customerMessage) && _asksToShowColors(customerMessage)) {
+      final rows = hairColors
+          .where((row) => (row['is_active'] ?? true) != false)
+          .take(20)
+          .map((row) => <String, dynamic>{
+                'source_table': 'hair_colors',
+                'code': (row['code'] ?? '').toString(),
+                'name': (row['name'] ?? '').toString(),
+              })
+          .toList();
+
+      if (rows.isNotEmpty) {
+        final lines = rows.take(14).map((row) {
+          final code = row['code']?.toString().trim() ?? '';
+          final name = row['name']?.toString().trim() ?? '';
+          if (code.isNotEmpty && name.isNotEmpty) return '• $code — $name';
+          return '• ${code.isNotEmpty ? code : name}';
+        }).join('\n');
+
+        return FaithiApiResult(
+          reply: 'Here are the available Faith Hairstyle hair colors:\n$lines',
+          rows: rows,
+          meta: const {'intent': 'colors', 'fast_path': true, 'source': 'supabase'},
+        );
+      }
+    }
+
+    if (_isAvailabilityIntent(customerMessage)) {
+      if (availabilitySlots.isEmpty && !_isLoadingData) {
+        availabilitySlots = await _loadAvailability();
+      }
+
+      final rows = availabilitySlots
+          .where(_availabilityRowLooksOpen)
+          .take(8)
+          .map((row) => <String, dynamic>{
+                'source_table': 'availability_slots',
+                ...row,
+              })
+          .toList();
+
+      if (rows.isNotEmpty) {
+        final lines = rows.map((row) {
+          final date = _prettyDate(
+            row['slot_date'] ?? row['date'] ?? row['booking_date'],
+          );
+          final start = _prettyTime(
+            row['start_time'] ?? row['time'] ?? row['slot_time'],
+          );
+          final end = _prettyTime(row['end_time']);
+          final time = end.isNotEmpty ? '$start–$end' : start;
+          return '• $date • $time';
+        }).join('\n');
+
+        return FaithiApiResult(
+          reply: 'Here are the next available appointment times:\n$lines\nTap Book when you see a time you want.',
+          rows: rows,
+          meta: const {'intent': 'availability', 'fast_path': true, 'source': 'supabase'},
+        );
+      }
+
+      return const FaithiApiResult(
+        reply: 'I do not see an open appointment time in the live schedule right now. Please open the Book page to check the latest calendar.',
+        rows: [],
+        meta: {'intent': 'availability', 'fast_path': true, 'source': 'supabase'},
+      );
+    }
+
+    if (_isSimpleServiceListIntent(customerMessage) && services.isNotEmpty) {
+      final rows = services.take(10).map((service) {
+        return <String, dynamic>{'source_table': 'services', ...service};
+      }).toList();
+
+      final lines = rows.take(8).map((service) {
+        final name = (service['name'] ?? 'Service').toString();
+        final price = _servicePriceLabel(service);
+        return price.isEmpty ? '• $name' : '• $name — starting at $price';
+      }).join('\n');
+
+      return FaithiApiResult(
+        reply: 'Here are some Faith Hairstyle services:\n$lines',
+        rows: rows,
+        meta: const {'intent': 'services', 'fast_path': true, 'source': 'supabase'},
+      );
+    }
+
+    if (_isPriceIntent(customerMessage) && services.isNotEmpty) {
+      final service = _findBestLocalService(customerMessage);
+      if (service != null) {
+        final name = (service['name'] ?? 'That service').toString();
+        final price = _servicePriceLabel(service);
+        if (price.isNotEmpty) {
+          return FaithiApiResult(
+            reply: '$name starts at $price.',
+            rows: [<String, dynamic>{'source_table': 'services', ...service}],
+            meta: const {'intent': 'prices', 'fast_path': true, 'source': 'supabase'},
+          );
+        }
+      }
+    }
+
+    // Let the LLM handle recommendations, comparisons and natural follow-ups.
+    if (lower.trim().isEmpty) return null;
+    return null;
   }
 
   // ==========================================================
@@ -1515,7 +1666,8 @@ class FaithCopilotController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _fetchAIResponse(cleanText);
+      final fastResult = await _tryFastLocalResponse(cleanText);
+      final result = fastResult ?? await _fetchAIResponse(cleanText);
       final reply = _removeRepeatedGreeting(result.reply);
 
       _processAIResponse(
@@ -1558,8 +1710,8 @@ class FaithCopilotController extends ChangeNotifier {
         ? _messages.sublist(0, _messages.length - 1)
         : <ChatMessage>[];
 
-    final recentHistory = historySource.length > 8
-        ? historySource.sublist(historySource.length - 8)
+    final recentHistory = historySource.length > 6
+        ? historySource.sublist(historySource.length - 6)
         : historySource;
 
     final history = recentHistory
@@ -1587,7 +1739,7 @@ class FaithCopilotController extends ChangeNotifier {
       'context': {
         'app': 'faith_hairstyle',
         'assistant': 'faithi',
-        'backend_generation': 'v4.4+',
+        'backend_generation': 'v4.6+',
         'model_policy': {
           'primary_model': _primaryModel,
           'single_model_only': true,
@@ -1616,7 +1768,7 @@ class FaithCopilotController extends ChangeNotifier {
       },
     };
 
-    final response = await http
+    final response = await _httpClient
         .post(
           Uri.parse(_aiEndpoint),
           headers: const {
@@ -1625,7 +1777,7 @@ class FaithCopilotController extends ChangeNotifier {
           },
           body: jsonEncode(body),
         )
-        .timeout(const Duration(seconds: 25));
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
