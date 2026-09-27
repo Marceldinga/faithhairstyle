@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,25 +12,20 @@ import 'booking_page.dart';
 
 // ============================================================
 // FAITH AI / FAITHI COPILOT
-// Current frontend for Faithi backend v4.4+
 //
-// - Railway production endpoint
-// - Voice input + neural female TTS
-// - NO OpenAI voice API
-// - Live Supabase services/colors/availability
-// - One AI model: meta-llama/Llama-3.1-8B-Instruct
+// - Railway production backend
+// - Voice input
+// - Neural female TTS
+// - No OpenAI voice API
+// - Live Supabase services, colors and availability
+// - Single requested AI model
 // - Service images
 // - Booking integration
 // - Conversation history
 // - Customer preferences
 //
-// VOICE FLOW:
-// 1. User sends/speaks
-// 2. Faithi processes
-// 3. Complete written response is added
-// 4. Typing indicator disappears
-// 5. Flutter paints the written response
-// 6. Female neural voice begins
+// VOICE ORDER:
+// User -> Faithi -> full text -> UI paint -> voice
 // ============================================================
 
 // ============================================================
@@ -48,7 +43,8 @@ class FaithAICopilotShell extends StatefulWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
-  State<FaithAICopilotShell> createState() => _FaithAICopilotShellState();
+  State<FaithAICopilotShell> createState() =>
+      _FaithAICopilotShellState();
 }
 
 class _FaithAICopilotShellState extends State<FaithAICopilotShell> {
@@ -148,7 +144,7 @@ class _CopilotLauncher extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: .20),
+              color: Colors.black.withOpacity(0.20),
               blurRadius: 22,
               offset: const Offset(0, 9),
             ),
@@ -251,7 +247,8 @@ class FaithAICopilotPanel extends StatefulWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
-  State<FaithAICopilotPanel> createState() => _FaithAICopilotPanelState();
+  State<FaithAICopilotPanel> createState() =>
+      _FaithAICopilotPanelState();
 }
 
 class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
@@ -271,7 +268,6 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     super.initState();
 
     _controller = FaithCopilotController.instance;
-
     _controller.addListener(_onControllerChanged);
 
     unawaited(_initializeSpeech());
@@ -342,7 +338,9 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
         _speechError =
             available ? null : 'Voice input is not available.';
       });
-    } catch (_) {
+    } catch (error) {
+      debugPrint('FAITHI SPEECH INIT ERROR: $error');
+
       if (!mounted) return;
 
       setState(() {
@@ -369,8 +367,6 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       return;
     }
 
-    // Interrupt Faithi immediately when the customer
-    // presses the microphone.
     await _controller.stopSpeaking();
 
     if (!_speechReady) {
@@ -390,6 +386,8 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
         return;
       }
     }
+
+    if (!mounted) return;
 
     setState(() {
       _isListening = true;
@@ -426,22 +424,26 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   }
 
   String _removeDuplicatedSpeech(String input) {
-    if (input.length < 2) {
-      return input;
+    var value = input.trim();
+
+    if (value.isEmpty) {
+      return value;
     }
 
-    if (input.length.isEven) {
-      final half = input.length ~/ 2;
+    final words = value.split(RegExp(r'\s+'));
 
-      final first = input.substring(0, half);
-      final second = input.substring(half);
+    if (words.length >= 4 && words.length.isEven) {
+      final half = words.length ~/ 2;
+
+      final first = words.sublist(0, half).join(' ');
+      final second = words.sublist(half).join(' ');
 
       if (first.toLowerCase() == second.toLowerCase()) {
-        return first;
+        value = first;
       }
     }
 
-    return input;
+    return value;
   }
 
   void _sendMessage([String? preset]) {
@@ -487,7 +489,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
+    final screen = MediaQuery.of(context).size;
 
     final width = math.min(
       430.0,
@@ -505,8 +507,8 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       ),
     );
 
-    return ListenableBuilder(
-      listenable: _controller,
+    return AnimatedBuilder(
+      animation: _controller,
       builder: (context, _) {
         return Container(
           width: width,
@@ -521,7 +523,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: .24),
+                color: Colors.black.withOpacity(0.24),
                 blurRadius: 32,
                 offset: const Offset(0, 14),
               ),
@@ -531,12 +533,10 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             children: [
               _buildHeader(),
               _buildQuickActions(),
-
               const Divider(
                 height: 1,
                 color: AppColors.borderLight,
               ),
-
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
@@ -560,13 +560,10 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
                   },
                 ),
               ),
-
               if (_controller.showBookingButton &&
                   !_controller.isLoading)
                 _buildBookingButton(),
-
               if (_isListening) _buildListeningBanner(),
-
               _buildInputArea(),
             ],
           ),
@@ -577,12 +574,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        14,
-        12,
-        8,
-        12,
-      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -607,9 +599,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
               size: 21,
             ),
           ),
-
           const SizedBox(width: 10),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -638,15 +628,11 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
               ],
             ),
           ),
-
           IconButton(
-            tooltip: _controller.voiceEnabled
-                ? 'Turn voice off'
-                : 'Turn voice on',
+            tooltip:
+                _controller.voiceEnabled ? 'Turn voice off' : 'Turn voice on',
             onPressed: () {
-              unawaited(
-                _controller.toggleVoice(),
-              );
+              unawaited(_controller.toggleVoice());
             },
             icon: Icon(
               _controller.voiceEnabled
@@ -658,15 +644,12 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
               size: 21,
             ),
           ),
-
           IconButton(
             tooltip: 'Refresh salon data',
             onPressed: _controller.isLoadingData
                 ? null
                 : () {
-                    unawaited(
-                      _controller.loadSalonData(),
-                    );
+                    unawaited(_controller.loadSalonData());
                   },
             icon: const Icon(
               Icons.refresh_rounded,
@@ -674,7 +657,6 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
               size: 20,
             ),
           ),
-
           if (widget.onMinimize != null)
             IconButton(
               tooltip: 'Minimize',
@@ -685,7 +667,6 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
                 size: 23,
               ),
             ),
-
           if (widget.onClose != null)
             IconButton(
               tooltip: 'Close',
@@ -704,14 +685,10 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   Widget _buildQuickActions() {
     return Container(
       height: 48,
-      padding: const EdgeInsets.symmetric(
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 10,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         children: [
           _QuickChip(
             label: 'Choose for me',
@@ -721,9 +698,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             ),
             isLoading: _controller.isLoading,
           ),
-
           const SizedBox(width: 7),
-
           _QuickChip(
             label: 'Under my budget',
             icon: Icons.savings_outlined,
@@ -732,9 +707,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             ),
             isLoading: _controller.isLoading,
           ),
-
           const SizedBox(width: 7),
-
           _QuickChip(
             label: 'Colors',
             icon: Icons.palette_outlined,
@@ -743,9 +716,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             ),
             isLoading: _controller.isLoading,
           ),
-
           const SizedBox(width: 7),
-
           _QuickChip(
             label: 'Open times',
             icon: Icons.schedule_rounded,
@@ -763,32 +734,21 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     final name = _controller.lastSuggestedServiceName;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        12,
-        0,
-        12,
-        8,
-      ),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: SizedBox(
         width: double.infinity,
         child: FilledButton.icon(
           onPressed: _openBooking,
-          icon: const Icon(
-            Icons.calendar_month_rounded,
-          ),
+          icon: const Icon(Icons.calendar_month_rounded),
           label: Text(
-            name == null
-                ? 'OPEN BOOKING'
-                : 'BOOK ${name.toUpperCase()}',
+            name == null ? 'OPEN BOOKING' : 'BOOK ${name.toUpperCase()}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.navy,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              vertical: 13,
-            ),
+            padding: const EdgeInsets.symmetric(vertical: 13),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
@@ -801,12 +761,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   Widget _buildListeningBanner() {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(
-        12,
-        0,
-        12,
-        8,
-      ),
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.symmetric(
         horizontal: 12,
         vertical: 9,
@@ -839,12 +794,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
 
   Widget _buildInputArea() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        10,
-        8,
-        10,
-        10,
-      ),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -886,26 +836,20 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
               ),
             ),
           ),
-
           const SizedBox(width: 8),
-
           SizedBox(
             width: 46,
             height: 46,
             child: IconButton.filled(
-              tooltip: _isListening
-                  ? 'Stop listening'
-                  : 'Voice input',
-              onPressed: _controller.isLoading
-                  ? null
-                  : _toggleListening,
+              tooltip: _isListening ? 'Stop listening' : 'Voice input',
+              onPressed:
+                  _controller.isLoading ? null : _toggleListening,
               style: IconButton.styleFrom(
                 backgroundColor: _isListening
                     ? const Color(0xFFD84A4A)
                     : Colors.white,
-                foregroundColor: _isListening
-                    ? Colors.white
-                    : AppColors.deepGold,
+                foregroundColor:
+                    _isListening ? Colors.white : AppColors.deepGold,
                 side: const BorderSide(
                   color: AppColors.borderGold,
                 ),
@@ -917,16 +861,13 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
               ),
             ),
           ),
-
           const SizedBox(width: 8),
-
           SizedBox(
             width: 46,
             height: 46,
             child: FilledButton(
-              onPressed: _controller.isLoading
-                  ? null
-                  : () => _sendMessage(),
+              onPressed:
+                  _controller.isLoading ? null : () => _sendMessage(),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.gold,
                 foregroundColor: AppColors.navy,
@@ -961,17 +902,12 @@ class _MessageBubble extends StatelessWidget {
     final isUser = message.isUser;
 
     return Align(
-      alignment: isUser
-          ? Alignment.centerRight
-          : Alignment.centerLeft,
+      alignment:
+          isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(
-          vertical: 5,
-        ),
+        margin: const EdgeInsets.symmetric(vertical: 5),
         padding: const EdgeInsets.all(13),
-        constraints: const BoxConstraints(
-          maxWidth: 360,
-        ),
+        constraints: const BoxConstraints(maxWidth: 360),
         decoration: BoxDecoration(
           gradient: isUser
               ? const LinearGradient(
@@ -985,12 +921,8 @@ class _MessageBubble extends StatelessWidget {
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(
-              isUser ? 18 : 5,
-            ),
-            bottomRight: Radius.circular(
-              isUser ? 5 : 18,
-            ),
+            bottomLeft: Radius.circular(isUser ? 18 : 5),
+            bottomRight: Radius.circular(isUser ? 5 : 18),
           ),
           border: isUser
               ? null
@@ -999,9 +931,8 @@ class _MessageBubble extends StatelessWidget {
                 ),
         ),
         child: Column(
-          crossAxisAlignment: isUser
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -1024,26 +955,17 @@ class _MessageBubble extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 5),
-
-            _MarkdownText(
-              text: message.text,
-            ),
-
-            if (!isUser &&
-                message.serviceImages.isNotEmpty) ...[
+            _MarkdownText(text: message.text),
+            if (!isUser && message.serviceImages.isNotEmpty) ...[
               const SizedBox(height: 12),
               _ServiceRecommendationImages(
                 images: message.serviceImages,
               ),
             ],
-
             if (!isUser && message.colors.isNotEmpty) ...[
               const SizedBox(height: 12),
-              _ColorResults(
-                colors: message.colors,
-              ),
+              _ColorResults(colors: message.colors),
             ],
           ],
         ),
@@ -1068,9 +990,7 @@ class _ServiceRecommendationImages extends StatelessWidget {
     return Column(
       children: [
         for (int i = 0; i < images.length; i++) ...[
-          _ServiceImageCard(
-            image: images[i],
-          ),
+          _ServiceImageCard(image: images[i]),
           if (i != images.length - 1)
             const SizedBox(height: 10),
         ],
@@ -1127,8 +1047,7 @@ class _ServiceImageCard extends StatelessWidget {
                   alignment: Alignment.center,
                   color: AppColors.pageBackground,
                   child: const Column(
-                    mainAxisAlignment:
-                        MainAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
                         Icons.broken_image_rounded,
@@ -1148,12 +1067,10 @@ class _ServiceImageCard extends StatelessWidget {
               },
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.all(10),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   image.serviceName,
@@ -1163,12 +1080,10 @@ class _ServiceImageCard extends StatelessWidget {
                     fontSize: 13,
                   ),
                 ),
-
-                if (image.price != null)
+                if (image.price != null &&
+                    image.price!.trim().isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(
-                      top: 3,
-                    ),
+                    padding: const EdgeInsets.only(top: 3),
                     child: Text(
                       'Starting at ${image.price}',
                       style: const TextStyle(
@@ -1204,6 +1119,11 @@ class _ColorResults extends StatelessWidget {
       spacing: 6,
       runSpacing: 6,
       children: colors.map((color) {
+        final label = [
+          color.code.trim(),
+          color.name.trim(),
+        ].where((value) => value.isNotEmpty).join(' • ');
+
         return Container(
           padding: const EdgeInsets.symmetric(
             horizontal: 9,
@@ -1217,7 +1137,7 @@ class _ColorResults extends StatelessWidget {
             ),
           ),
           child: Text(
-            '${color.code} • ${color.name}',
+            label,
             style: const TextStyle(
               color: AppColors.navy,
               fontSize: 11,
@@ -1255,9 +1175,8 @@ class _MarkdownText extends StatelessWidget {
         TextSpan(
           text: split[i],
           style: TextStyle(
-            fontWeight: i.isOdd
-                ? FontWeight.bold
-                : FontWeight.normal,
+            fontWeight:
+                i.isOdd ? FontWeight.bold : FontWeight.normal,
             color: AppColors.navy,
             fontSize: 14,
             height: 1.4,
@@ -1267,9 +1186,7 @@ class _MarkdownText extends StatelessWidget {
     }
 
     return SelectableText.rich(
-      TextSpan(
-        children: spans,
-      ),
+      TextSpan(children: spans),
     );
   }
 }
@@ -1384,7 +1301,8 @@ class _TypingIndicator extends StatefulWidget {
   const _TypingIndicator();
 
   @override
-  State<_TypingIndicator> createState() => _TypingIndicatorState();
+  State<_TypingIndicator> createState() =>
+      _TypingIndicatorState();
 }
 
 class _TypingIndicatorState extends State<_TypingIndicator>
@@ -1412,9 +1330,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(
-          vertical: 5,
-        ),
+        margin: const EdgeInsets.symmetric(vertical: 5),
         padding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
@@ -1499,11 +1415,8 @@ class FaithCopilotController extends ChangeNotifier {
   static const String _apiBase =
       'https://theyoungshallgrow-api-production.up.railway.app';
 
-  static const String _aiEndpoint =
-      '$_apiBase/chat';
-
-  static const String _ttsEndpoint =
-      '$_apiBase/tts';
+  static const String _aiEndpoint = '$_apiBase/chat';
+  static const String _ttsEndpoint = '$_apiBase/tts';
 
   // ==========================================================
   // SINGLE AI MODEL
@@ -1512,56 +1425,42 @@ class FaithCopilotController extends ChangeNotifier {
   static const String _primaryModel =
       'meta-llama/Llama-3.1-8B-Instruct';
 
-  final SupabaseClient _supabase =
-      Supabase.instance.client;
-
-  final http.Client _httpClient =
-      http.Client();
-
-  final AudioPlayer _voicePlayer =
-      AudioPlayer();
+  final SupabaseClient _supabase = Supabase.instance.client;
+  final http.Client _httpClient = http.Client();
+  final AudioPlayer _voicePlayer = AudioPlayer();
 
   final List<ChatMessage> _messages = [];
 
   List<ChatMessage> get messages =>
       List.unmodifiable(_messages);
 
-  bool get hasChatHistory =>
-      _messages.length > 1;
+  bool get hasChatHistory => _messages.length > 1;
 
   bool _isLoading = false;
 
-  bool get isLoading =>
-      _isLoading;
+  bool get isLoading => _isLoading;
 
   bool _isLoadingData = false;
 
-  bool get isLoadingData =>
-      _isLoadingData;
+  bool get isLoadingData => _isLoadingData;
 
   bool _salonDataLoaded = false;
 
   bool _showBookingButton = false;
 
-  bool get showBookingButton =>
-      _showBookingButton;
+  bool get showBookingButton => _showBookingButton;
 
   bool _voiceEnabled = true;
 
-  bool get voiceEnabled =>
-      _voiceEnabled;
+  bool get voiceEnabled => _voiceEnabled;
 
-  // Every new voice request gets a new ID.
-  // This prevents stale TTS requests from playing later.
   int _voiceRequestId = 0;
 
   final CustomerPreferences preferences =
       CustomerPreferences();
 
   List<Map<String, dynamic>> services = [];
-
   List<Map<String, dynamic>> hairColors = [];
-
   List<Map<String, dynamic>> availabilitySlots = [];
 
   String? lastSuggestedServiceName;
@@ -1576,14 +1475,10 @@ class FaithCopilotController extends ChangeNotifier {
   Future<void> warmUp() async {
     try {
       await _httpClient
-          .get(
-            Uri.parse(_apiBase),
-          )
-          .timeout(
-            const Duration(seconds: 4),
-          );
-    } catch (_) {
-      // Ignore warm-up failures.
+          .get(Uri.parse(_apiBase))
+          .timeout(const Duration(seconds: 4));
+    } catch (error) {
+      debugPrint('FAITHI WARMUP ERROR: $error');
     }
   }
 
@@ -1598,13 +1493,12 @@ class FaithCopilotController extends ChangeNotifier {
   }
 
   Future<void> stopSpeaking() async {
-    // Invalidate any pending TTS response.
     _voiceRequestId++;
 
     try {
       await _voicePlayer.stop();
-    } catch (_) {
-      // Ignore stop failures.
+    } catch (error) {
+      debugPrint('FAITHI STOP VOICE ERROR: $error');
     }
   }
 
@@ -1619,11 +1513,9 @@ class FaithCopilotController extends ChangeNotifier {
       return;
     }
 
-    // This request becomes the active voice request.
     final requestId = ++_voiceRequestId;
 
     try {
-      // Stop anything currently playing.
       await _voicePlayer.stop();
 
       if (!_voiceEnabled ||
@@ -1640,20 +1532,12 @@ class FaithCopilotController extends ChangeNotifier {
             },
             body: jsonEncode({
               'text': cleaned,
-
-              // Female neural voice.
-              // This is NOT OpenAI.
               'voice': 'en-US-AvaNeural',
-
-              // Faster conversational rate.
               'rate': '+28%',
             }),
           )
-          .timeout(
-            const Duration(seconds: 10),
-          );
+          .timeout(const Duration(seconds: 10));
 
-      // User may have interrupted while TTS was being generated.
       if (!_voiceEnabled ||
           requestId != _voiceRequestId) {
         return;
@@ -1661,6 +1545,10 @@ class FaithCopilotController extends ChangeNotifier {
 
       if (response.statusCode < 200 ||
           response.statusCode >= 300) {
+        debugPrint(
+          'FAITHI TTS HTTP ${response.statusCode}: '
+          '${response.body}',
+        );
         return;
       }
 
@@ -1668,19 +1556,17 @@ class FaithCopilotController extends ChangeNotifier {
         return;
       }
 
-      // Final stale-request check.
       if (!_voiceEnabled ||
           requestId != _voiceRequestId) {
         return;
       }
 
       await _voicePlayer.play(
-        BytesSource(
-          response.bodyBytes,
-        ),
+        BytesSource(response.bodyBytes),
       );
-    } catch (_) {
-      // Voice failure must never break text chat.
+    } catch (error, stackTrace) {
+      debugPrint('FAITHI TTS ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 
@@ -1742,10 +1628,7 @@ class FaithCopilotController extends ChangeNotifier {
       final lastSpace = cut.lastIndexOf(' ');
 
       if (lastSpace > 1000) {
-        cut = cut.substring(
-          0,
-          lastSpace,
-        );
+        cut = cut.substring(0, lastSpace);
       }
 
       cleaned = '$cut.';
@@ -1764,7 +1647,6 @@ class FaithCopilotController extends ChangeNotifier {
     }
 
     _isLoadingData = true;
-
     notifyListeners();
 
     try {
@@ -1782,9 +1664,11 @@ class FaithCopilotController extends ChangeNotifier {
       availabilitySlots = results[2];
 
       _salonDataLoaded = true;
+    } catch (error, stackTrace) {
+      debugPrint('FAITHI DATA LOAD ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
     } finally {
       _isLoadingData = false;
-
       notifyListeners();
     }
   }
@@ -1794,20 +1678,32 @@ class FaithCopilotController extends ChangeNotifier {
       final rows = await _supabase
           .from('services')
           .select()
-          .eq(
-            'is_active',
-            true,
-          )
-          .order(
-            'price',
-            ascending: true,
-          );
+          .eq('is_active', true)
+          .order('price', ascending: true);
 
-      return List<Map<String, dynamic>>.from(
-        rows,
-      );
-    } catch (_) {
-      return <Map<String, dynamic>>[];
+      return List<Map<String, dynamic>>.from(rows);
+    } catch (error) {
+      debugPrint('FAITHI SERVICES ERROR: $error');
+
+      try {
+        final rows = await _supabase
+            .from('services')
+            .select();
+
+        return List<Map<String, dynamic>>.from(rows)
+            .where(
+              (row) =>
+                  (row['is_active'] ?? true) != false,
+            )
+            .toList();
+      } catch (fallbackError) {
+        debugPrint(
+          'FAITHI SERVICES FALLBACK ERROR: '
+          '$fallbackError',
+        );
+
+        return <Map<String, dynamic>>[];
+      }
     }
   }
 
@@ -1816,81 +1712,71 @@ class FaithCopilotController extends ChangeNotifier {
       final rows = await _supabase
           .from('hair_colors')
           .select()
-          .eq(
-            'is_active',
-            true,
-          )
-          .order(
-            'code',
-            ascending: true,
-          );
+          .eq('is_active', true)
+          .order('code', ascending: true);
 
-      return List<Map<String, dynamic>>.from(
-        rows,
-      );
-    } catch (_) {
-      return <Map<String, dynamic>>[];
+      return List<Map<String, dynamic>>.from(rows);
+    } catch (error) {
+      debugPrint('FAITHI COLORS ERROR: $error');
+
+      try {
+        final rows = await _supabase
+            .from('hair_colors')
+            .select();
+
+        return List<Map<String, dynamic>>.from(rows)
+            .where(
+              (row) =>
+                  (row['is_active'] ?? true) != false,
+            )
+            .toList();
+      } catch (fallbackError) {
+        debugPrint(
+          'FAITHI COLORS FALLBACK ERROR: '
+          '$fallbackError',
+        );
+
+        return <Map<String, dynamic>>[];
+      }
     }
   }
 
   Future<List<Map<String, dynamic>>> _loadAvailability() async {
-    final today = DateTime.now()
-        .toIso8601String()
-        .substring(
-          0,
-          10,
-        );
+    final today =
+        DateTime.now().toIso8601String().substring(0, 10);
 
     try {
       final rows = await _supabase
           .from('availability_slots')
           .select()
-          .eq(
-            'is_available',
-            true,
-          )
-          .gte(
-            'slot_date',
-            today,
-          )
-          .order(
-            'slot_date',
-            ascending: true,
-          )
-          .order(
-            'start_time',
-            ascending: true,
-          )
+          .eq('is_available', true)
+          .gte('slot_date', today)
+          .order('slot_date', ascending: true)
+          .order('start_time', ascending: true)
           .limit(24);
 
-      return List<Map<String, dynamic>>.from(
-        rows,
-      );
-    } catch (_) {
+      return List<Map<String, dynamic>>.from(rows);
+    } catch (error) {
+      debugPrint('FAITHI AVAILABILITY ERROR: $error');
+
       try {
         final rows = await _supabase
             .from('availability_slots')
             .select()
-            .gte(
-              'slot_date',
-              today,
-            )
-            .order(
-              'slot_date',
-              ascending: true,
-            )
-            .order(
-              'start_time',
-              ascending: true,
-            )
+            .gte('slot_date', today)
+            .order('slot_date', ascending: true)
+            .order('start_time', ascending: true)
             .limit(24);
 
-        return List<Map<String, dynamic>>.from(
-          rows,
-        ).where(
-          _availabilityRowLooksOpen,
-        ).toList();
-      } catch (_) {
+        return List<Map<String, dynamic>>.from(rows)
+            .where(_availabilityRowLooksOpen)
+            .toList();
+      } catch (fallbackError) {
+        debugPrint(
+          'FAITHI AVAILABILITY FALLBACK ERROR: '
+          '$fallbackError',
+        );
+
         return <Map<String, dynamic>>[];
       }
     }
@@ -1971,13 +1857,11 @@ class FaithCopilotController extends ChangeNotifier {
     final lower = text.toLowerCase();
 
     Map<String, dynamic>? best;
-
     var bestLength = 0;
 
     for (final service in services) {
-      final name = (service['name'] ?? '')
-          .toString()
-          .trim();
+      final name =
+          (service['name'] ?? '').toString().trim();
 
       if (name.isEmpty) {
         continue;
@@ -2056,19 +1940,15 @@ class FaithCopilotController extends ChangeNotifier {
   }
 
   String _prettyDate(dynamic value) {
-    final raw = (value ?? '')
-        .toString()
-        .trim();
+    final raw =
+        (value ?? '').toString().trim();
 
     if (raw.length < 10) {
       return raw;
     }
 
     final parsed = DateTime.tryParse(
-      raw.substring(
-        0,
-        10,
-      ),
+      raw.substring(0, 10),
     );
 
     if (parsed == null) {
@@ -2106,9 +1986,8 @@ class FaithCopilotController extends ChangeNotifier {
   }
 
   String _prettyTime(dynamic value) {
-    final raw = (value ?? '')
-        .toString()
-        .trim();
+    final raw =
+        (value ?? '').toString().trim();
 
     if (raw.isEmpty) {
       return '';
@@ -2122,16 +2001,11 @@ class FaithCopilotController extends ChangeNotifier {
       return raw;
     }
 
-    var hour = int.tryParse(
-          match.group(1) ?? '',
-        ) ??
-        0;
+    var hour =
+        int.tryParse(match.group(1) ?? '') ?? 0;
 
     final minute = match.group(2) ?? '00';
-
-    final suffix = hour >= 12
-        ? 'PM'
-        : 'AM';
+    final suffix = hour >= 12 ? 'PM' : 'AM';
 
     hour %= 12;
 
@@ -2149,16 +2023,11 @@ class FaithCopilotController extends ChangeNotifier {
   Future<FaithiApiResult?> _tryFastLocalResponse(
     String customerMessage,
   ) async {
-    final lower = customerMessage.toLowerCase();
-
     if (!_salonDataLoaded && !_isLoadingData) {
       await loadSalonData();
     }
 
-    // --------------------------------------------------------
     // COLORS
-    // --------------------------------------------------------
-
     if (_isColorIntent(customerMessage) &&
         _asksToShowColors(customerMessage)) {
       final rows = hairColors
@@ -2170,8 +2039,10 @@ class FaithCopilotController extends ChangeNotifier {
           .map(
             (row) => <String, dynamic>{
               'source_table': 'hair_colors',
-              'code': (row['code'] ?? '').toString(),
-              'name': (row['name'] ?? '').toString(),
+              'code':
+                  (row['code'] ?? '').toString(),
+              'name':
+                  (row['name'] ?? '').toString(),
             },
           )
           .toList();
@@ -2207,10 +2078,7 @@ class FaithCopilotController extends ChangeNotifier {
       }
     }
 
-    // --------------------------------------------------------
     // AVAILABILITY
-    // --------------------------------------------------------
-
     if (_isAvailabilityIntent(customerMessage)) {
       if (availabilitySlots.isEmpty &&
           !_isLoadingData) {
@@ -2219,9 +2087,7 @@ class FaithCopilotController extends ChangeNotifier {
       }
 
       final rows = availabilitySlots
-          .where(
-            _availabilityRowLooksOpen,
-          )
+          .where(_availabilityRowLooksOpen)
           .take(8)
           .map(
             (row) => <String, dynamic>{
@@ -2247,15 +2113,27 @@ class FaithCopilotController extends ChangeNotifier {
                   row['slot_time'],
             );
 
-            final end = _prettyTime(
-              row['end_time'],
-            );
+            final end =
+                _prettyTime(row['end_time']);
 
-            final time = end.isNotEmpty
-                ? '$start–$end'
-                : start;
+            String display;
 
-            return '• $date • $time';
+            if (date.isNotEmpty &&
+                start.isNotEmpty) {
+              display = '$date • $start';
+
+              if (end.isNotEmpty) {
+                display = '$date • $start–$end';
+              }
+            } else if (date.isNotEmpty) {
+              display = date;
+            } else if (start.isNotEmpty) {
+              display = start;
+            } else {
+              display = 'Available appointment';
+            }
+
+            return '• $display';
           },
         ).join('\n');
 
@@ -2263,7 +2141,7 @@ class FaithCopilotController extends ChangeNotifier {
           reply:
               'Here are the next available appointment times:\n'
               '$lines\n'
-              'Tap Book when you see a time you want.',
+              'Choose a hairstyle and tap Book when you are ready.',
           rows: rows,
           meta: const {
             'intent': 'availability',
@@ -2286,10 +2164,7 @@ class FaithCopilotController extends ChangeNotifier {
       );
     }
 
-    // --------------------------------------------------------
     // SERVICES
-    // --------------------------------------------------------
-
     if (_isSimpleServiceListIntent(customerMessage) &&
         services.isNotEmpty) {
       final rows = services.take(10).map(
@@ -2303,12 +2178,11 @@ class FaithCopilotController extends ChangeNotifier {
 
       final lines = rows.take(8).map(
         (service) {
-          final name = (service['name'] ?? 'Service')
-              .toString();
+          final name =
+              (service['name'] ?? 'Service').toString();
 
-          final price = _servicePriceLabel(
-            service,
-          );
+          final price =
+              _servicePriceLabel(service);
 
           return price.isEmpty
               ? '• $name'
@@ -2328,24 +2202,19 @@ class FaithCopilotController extends ChangeNotifier {
       );
     }
 
-    // --------------------------------------------------------
     // PRICE
-    // --------------------------------------------------------
-
     if (_isPriceIntent(customerMessage) &&
         services.isNotEmpty) {
-      final service = _findBestLocalService(
-        customerMessage,
-      );
+      final service =
+          _findBestLocalService(customerMessage);
 
       if (service != null) {
         final name =
             (service['name'] ?? 'That service')
                 .toString();
 
-        final price = _servicePriceLabel(
-          service,
-        );
+        final price =
+            _servicePriceLabel(service);
 
         if (price.isNotEmpty) {
           return FaithiApiResult(
@@ -2366,10 +2235,6 @@ class FaithCopilotController extends ChangeNotifier {
       }
     }
 
-    if (lower.trim().isEmpty) {
-      return null;
-    }
-
     return null;
   }
 
@@ -2387,23 +2252,17 @@ class FaithCopilotController extends ChangeNotifier {
     final now = DateTime.now();
 
     if (_lastSendAt != null &&
-        now
-                .difference(_lastSendAt!)
-                .inMilliseconds <
+        now.difference(_lastSendAt!).inMilliseconds <
             450) {
       return;
     }
 
     _lastSendAt = now;
 
-    // Stop any old voice immediately.
     await stopSpeaking();
 
-    preferences.extractAndRemember(
-      cleanText,
-    );
+    preferences.extractAndRemember(cleanText);
 
-    // Add customer message.
     _messages.add(
       ChatMessage(
         text: cleanText,
@@ -2411,32 +2270,19 @@ class FaithCopilotController extends ChangeNotifier {
       ),
     );
 
-    // Start typing indicator.
     _isLoading = true;
-
     notifyListeners();
 
     try {
-      // First use fast live Supabase response
-      // where appropriate.
       final fastResult =
-          await _tryFastLocalResponse(
-        cleanText,
-      );
+          await _tryFastLocalResponse(cleanText);
 
-      // Otherwise use the AI backend.
-      final result =
-          fastResult ??
-              await _fetchAIResponse(
-                cleanText,
-              );
+      final result = fastResult ??
+          await _fetchAIResponse(cleanText);
 
       final reply =
-          _removeRepeatedGreeting(
-        result.reply,
-      );
+          _removeRepeatedGreeting(result.reply);
 
-      // Add complete response to chat.
       _processAIResponse(
         userText: cleanText,
         reply: reply,
@@ -2444,33 +2290,19 @@ class FaithCopilotController extends ChangeNotifier {
         meta: result.meta,
       );
 
-      // ------------------------------------------------------
-      // IMPORTANT VOICE ORDER
-      // ------------------------------------------------------
-      //
-      // The assistant message is already inside _messages.
-      //
-      // Now:
-      // 1. Remove typing indicator
-      // 2. Notify Flutter
-      // 3. Wait for Flutter to paint
-      // 4. THEN start TTS
-      //
-      // ------------------------------------------------------
-
       _isLoading = false;
-
       notifyListeners();
 
-      // This guarantees a rendered frame before speech starts.
+      // Full text is painted before voice starts.
       await WidgetsBinding.instance.endOfFrame;
 
       if (_voiceEnabled) {
-        unawaited(
-          _speak(reply),
-        );
+        unawaited(_speak(reply));
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('FAITHI SEND ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
       const message =
           'I could not reach the Faithi AI service right now. '
           'Please try again.';
@@ -2483,16 +2315,12 @@ class FaithCopilotController extends ChangeNotifier {
       );
 
       _isLoading = false;
-
       notifyListeners();
 
-      // Paint the error before speaking it.
       await WidgetsBinding.instance.endOfFrame;
 
       if (_voiceEnabled) {
-        unawaited(
-          _speak(message),
-        );
+        unawaited(_speak(message));
       }
     }
   }
@@ -2511,11 +2339,12 @@ class FaithCopilotController extends ChangeNotifier {
           )
         : <ChatMessage>[];
 
-    final recentHistory = historySource.length > 6
-        ? historySource.sublist(
-            historySource.length - 6,
-          )
-        : historySource;
+    final recentHistory =
+        historySource.length > 6
+            ? historySource.sublist(
+                historySource.length - 6,
+              )
+            : historySource;
 
     final history = recentHistory
         .map(
@@ -2529,35 +2358,22 @@ class FaithCopilotController extends ChangeNotifier {
 
     final body = {
       'message': customerMessage,
-
       'history': history,
-
       'model': _primaryModel,
-
       'primary_model': _primaryModel,
-
       'single_model_only': true,
-
       'domain': 'hair_salon',
-
       'page': 'ai_chat',
-
       'safe_mode': true,
-
       'advanced_mode': true,
-
       'context': {
         'app': 'faith_hairstyle',
-
         'assistant': 'faithi',
-
         'backend_generation': 'v4.6+',
-
         'model_policy': {
           'primary_model': _primaryModel,
           'single_model_only': true,
         },
-
         'response_style': {
           'natural_conversation': true,
           'chatgpt_like': true,
@@ -2574,10 +2390,8 @@ class FaithCopilotController extends ChangeNotifier {
           'do_not_invent_prices_services_colors_or_availability':
               true,
         },
-
         'customer_preferences':
             preferences.toMap(),
-
         'frontend_capabilities': {
           'service_images': true,
           'booking_navigation': true,
@@ -2618,9 +2432,8 @@ class FaithCopilotController extends ChangeNotifier {
       );
     }
 
-    final reply = (decoded['reply'] ?? '')
-        .toString()
-        .trim();
+    final reply =
+        (decoded['reply'] ?? '').toString().trim();
 
     if (reply.isEmpty) {
       throw Exception(
@@ -2628,9 +2441,8 @@ class FaithCopilotController extends ChangeNotifier {
       );
     }
 
-    final rows = _extractDataframeRows(
-      decoded['dataframe'],
-    );
+    final rows =
+        _extractDataframeRows(decoded['dataframe']);
 
     final meta = decoded['meta'] is Map
         ? Map<String, dynamic>.from(
@@ -2673,11 +2485,8 @@ class FaithCopilotController extends ChangeNotifier {
       final data = dataframe['data'];
 
       if (columns is List && data is List) {
-        final names = columns
-            .map(
-              (e) => e.toString(),
-            )
-            .toList();
+        final names =
+            columns.map((e) => e.toString()).toList();
 
         final output =
             <Map<String, dynamic>>[];
@@ -2706,9 +2515,7 @@ class FaithCopilotController extends ChangeNotifier {
       if (dataframe.containsKey('name') ||
           dataframe.containsKey('image_url')) {
         return [
-          Map<String, dynamic>.from(
-            dataframe,
-          ),
+          Map<String, dynamic>.from(dataframe),
         ];
       }
     }
@@ -2727,7 +2534,7 @@ class FaithCopilotController extends ChangeNotifier {
   }
 
   // ==========================================================
-  // PROCESS BACKEND RESULT
+  // PROCESS RESULT
   // ==========================================================
 
   void _processAIResponse({
@@ -2737,6 +2544,11 @@ class FaithCopilotController extends ChangeNotifier {
         structuredRows,
     required Map<String, dynamic> meta,
   }) {
+    // Reset stale booking state before evaluating this response.
+    _showBookingButton = false;
+    lastSuggestedServiceName = null;
+    lastSuggestedServiceId = null;
+
     final serviceMatches =
         <Map<String, dynamic>>[];
 
@@ -2753,13 +2565,16 @@ class FaithCopilotController extends ChangeNotifier {
           .toString()
           .toLowerCase();
 
-      final name = (row['name'] ?? '')
+      final name = (row['name'] ??
+              row['service_name'] ??
+              '')
           .toString()
           .trim();
 
-      final imageUrl = (row['image_url'] ?? '')
-          .toString()
-          .trim();
+      final imageUrl =
+          (row['image_url'] ?? '')
+              .toString()
+              .trim();
 
       final code =
           (row['code'] ?? row['detail'] ?? '')
@@ -2770,10 +2585,7 @@ class FaithCopilotController extends ChangeNotifier {
           table.contains('color') ||
               (code.isNotEmpty &&
                   imageUrl.isEmpty &&
-                  _findLocalColor(
-                        code,
-                        name,
-                      ) !=
+                  _findLocalColor(code, name) !=
                       null);
 
       if (looksLikeColor &&
@@ -2799,13 +2611,12 @@ class FaithCopilotController extends ChangeNotifier {
       if (localService != null) {
         final key =
             localService['id']?.toString() ??
-                localService['name']?.toString() ??
+                localService['name']
+                    ?.toString() ??
                 '';
 
         if (seenServices.add(key)) {
-          serviceMatches.add(
-            localService,
-          );
+          serviceMatches.add(localService);
         }
       }
     }
@@ -2822,11 +2633,19 @@ class FaithCopilotController extends ChangeNotifier {
       );
     }
 
+    if (serviceMatches.isEmpty) {
+      final best =
+          _findBestLocalService('$userText $reply');
+
+      if (best != null) {
+        serviceMatches.add(best);
+      }
+    }
+
     if (colorMatches.isEmpty &&
         _isColorIntent(userText)) {
-      final specific = _findColorsFromText(
-        '$userText $reply',
-      );
+      final specific =
+          _findColorsFromText('$userText $reply');
 
       if (specific.isNotEmpty) {
         colorMatches.addAll(specific);
@@ -2857,6 +2676,9 @@ class FaithCopilotController extends ChangeNotifier {
         continue;
       }
 
+      final price =
+          _servicePriceLabel(service);
+
       images.add(
         ServiceImageAttachment(
           serviceId:
@@ -2865,9 +2687,8 @@ class FaithCopilotController extends ChangeNotifier {
               (service['name'] ?? 'Hairstyle')
                   .toString(),
           url: imageUrl,
-          price: _money(
-            service['price'],
-          ),
+          price:
+              price.isEmpty ? null : price,
         ),
       );
 
@@ -2901,13 +2722,13 @@ class FaithCopilotController extends ChangeNotifier {
             .toString()
             .toLowerCase();
 
-    if (_isBookingIntent(userText) ||
-        _isBookingIntent(reply) ||
-        intent == 'booking' ||
-        serviceMatches.isNotEmpty) {
-      _showBookingButton =
-          serviceMatches.isNotEmpty ||
-              getSuggestedService() != null;
+    if (serviceMatches.isNotEmpty) {
+      _showBookingButton = true;
+    } else if ((_isBookingIntent(userText) ||
+            _isBookingIntent(reply) ||
+            intent == 'booking') &&
+        getSuggestedService() != null) {
+      _showBookingButton = true;
     }
   }
 
@@ -2916,7 +2737,8 @@ class FaithCopilotController extends ChangeNotifier {
   ) {
     final id =
         (row['id'] ?? row['service_id'] ?? '')
-            .toString();
+            .toString()
+            .trim();
 
     if (id.isNotEmpty) {
       for (final service in services) {
@@ -2945,6 +2767,21 @@ class FaithCopilotController extends ChangeNotifier {
           return service;
         }
       }
+
+      // Partial match fallback.
+      for (final service in services) {
+        final localName =
+            (service['name'] ?? '')
+                .toString()
+                .trim()
+                .toLowerCase();
+
+        if (localName.isNotEmpty &&
+            (localName.contains(name) ||
+                name.contains(localName))) {
+          return service;
+        }
+      }
     }
 
     return null;
@@ -2961,17 +2798,14 @@ class FaithCopilotController extends ChangeNotifier {
     final seen = <String>{};
 
     for (final service in services) {
-      final name = (service['name'] ?? '')
-          .toString()
-          .trim();
+      final name =
+          (service['name'] ?? '').toString().trim();
 
       if (name.isEmpty) {
         continue;
       }
 
-      if (lower.contains(
-        name.toLowerCase(),
-      )) {
+      if (lower.contains(name.toLowerCase())) {
         final id =
             service['id']?.toString() ??
                 name.toLowerCase();
@@ -3029,16 +2863,13 @@ class FaithCopilotController extends ChangeNotifier {
     final seen = <String>{};
 
     for (final row in hairColors) {
-      final code = (row['code'] ?? '')
-          .toString()
-          .trim();
+      final code =
+          (row['code'] ?? '').toString().trim();
 
-      final name = (row['name'] ?? '')
-          .toString()
-          .trim();
+      final name =
+          (row['name'] ?? '').toString().trim();
 
-      if (code.isEmpty &&
-          name.isEmpty) {
+      if (code.isEmpty && name.isEmpty) {
         continue;
       }
 
@@ -3053,9 +2884,7 @@ class FaithCopilotController extends ChangeNotifier {
 
       final nameMatch =
           name.isNotEmpty &&
-              lower.contains(
-                name.toLowerCase(),
-              );
+              lower.contains(name.toLowerCase());
 
       if (codeMatch || nameMatch) {
         final key =
@@ -3155,16 +2984,12 @@ class FaithCopilotController extends ChangeNotifier {
       ),
     );
 
-    // First tell Flutter to display it.
     notifyListeners();
 
-    // Only start speaking AFTER Flutter paints it.
     WidgetsBinding.instance.addPostFrameCallback(
       (_) {
         if (_voiceEnabled) {
-          unawaited(
-            _speak(text),
-          );
+          unawaited(_speak(text));
         }
       },
     );
@@ -3175,6 +3000,13 @@ class FaithCopilotController extends ChangeNotifier {
   // ==========================================================
 
   String _removeRepeatedGreeting(String text) {
+    // Keep the initial assistant greeting in the conversation,
+    // but prevent subsequent AI responses from repeatedly
+    // introducing Faithi.
+    if (_messages.length <= 1) {
+      return text.trim();
+    }
+
     var cleaned = text.trimLeft();
 
     cleaned = cleaned.replaceFirst(
@@ -3218,11 +3050,29 @@ class FaithCopilotController extends ChangeNotifier {
       return null;
     }
 
+    final raw = value.toString().trim();
+
+    if (raw.isEmpty) {
+      return null;
+    }
+
+    // Preserve existing formatted ranges/text.
+    if (raw.contains('-') ||
+        raw.contains('–') ||
+        raw.contains('—')) {
+      return raw.startsWith(r'$')
+          ? raw
+          : '\$$raw';
+    }
+
+    final normalized =
+        raw.replaceAll(r'$', '').replaceAll(',', '');
+
     final parsed =
-        double.tryParse(value.toString());
+        double.tryParse(normalized);
 
     if (parsed == null) {
-      return value.toString();
+      return raw;
     }
 
     if (parsed == parsed.roundToDouble()) {
@@ -3245,9 +3095,7 @@ class FaithiApiResult {
   });
 
   final String reply;
-
   final List<Map<String, dynamic>> rows;
-
   final Map<String, dynamic> meta;
 }
 
@@ -3264,12 +3112,8 @@ class ChatMessage {
   });
 
   final String text;
-
   final bool isUser;
-
-  final List<ServiceImageAttachment>
-      serviceImages;
-
+  final List<ServiceImageAttachment> serviceImages;
   final List<HairColorResult> colors;
 }
 
@@ -3286,11 +3130,8 @@ class ServiceImageAttachment {
   });
 
   final String? serviceId;
-
   final String serviceName;
-
   final String url;
-
   final String? price;
 }
 
@@ -3305,7 +3146,6 @@ class HairColorResult {
   });
 
   final String code;
-
   final String name;
 }
 
@@ -3330,8 +3170,7 @@ class CustomerPreferences {
     ).firstMatch(text);
 
     if (budgetMatch != null) {
-      budget =
-          '\$${budgetMatch.group(1)}';
+      budget = '\$${budgetMatch.group(1)}';
     }
 
     for (final value in [
@@ -3349,17 +3188,20 @@ class CustomerPreferences {
       }
     }
 
+    // Longest phrases first to prevent "medium" from
+    // overwriting "small medium".
     for (final value in [
-      'jumbo',
-      'large',
       'small medium',
       'semi-medium',
       'semi medium',
+      'jumbo',
+      'large',
       'medium',
       'small',
     ]) {
       if (lower.contains(value)) {
         size = value;
+        break;
       }
     }
 
@@ -3403,13 +3245,10 @@ class CustomerPreferences {
     ];
 
     final mentioned =
-        dateWords.where(
-      lower.contains,
-    ).toList();
+        dateWords.where(lower.contains).toList();
 
     if (mentioned.isNotEmpty) {
-      datePreference =
-          mentioned.join(', ');
+      datePreference = mentioned.join(', ');
     }
   }
 
@@ -3417,19 +3256,14 @@ class CustomerPreferences {
     return {
       if (budget != null)
         'budget': budget,
-
       if (length != null)
         'length': length,
-
       if (size != null)
         'size': size,
-
       if (color != null)
         'color': color,
-
       if (occasion != null)
         'occasion': occasion,
-
       if (datePreference != null)
         'date_time_preference':
             datePreference,
