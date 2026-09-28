@@ -362,7 +362,14 @@ class _MainPageState extends State<MainPage> {
       case 3:
         return BookingPage(initialService: selectedService);
       case 4:
-        return const LiveChatPage();
+        return const Scaffold(
+            appBar: BusinessAppBar(title: 'Live Chat'),
+            body: Center(
+                child: Text('Live Chat coming soon',
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: kInk))));
       case 5:
         return const SocialPage();
       default:
@@ -605,16 +612,26 @@ class BusinessAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
           ),
           const SizedBox(width: 14),
-          Flexible(child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-              if (wide) const Text('RIVERDALE, MARYLAND',
-                style: TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 2.2)),
-            ],
-          ),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900)),
+                if (wide)
+                  const Text('RIVERDALE, MARYLAND',
+                      style: TextStyle(
+                          color: kPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.2)),
+              ],
+            ),
           ),
         ],
       ),
@@ -735,7 +752,11 @@ class _HeroSectionState extends State<HeroSection> {
                 child: DecoratedBox(
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xA6071A42), Color(0x520A3C86), Color(0x8C071A42)],
+                      colors: [
+                        Color(0xA6071A42),
+                        Color(0x520A3C86),
+                        Color(0x8C071A42)
+                      ],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
@@ -752,7 +773,8 @@ class _HeroSectionState extends State<HeroSection> {
                     constraints: const BoxConstraints(maxWidth: 1450),
                     padding: EdgeInsets.all(wideScreen ? 42 : 22),
                     decoration: BoxDecoration(
-                      border: Border.all(color: kPrimary.withValues(alpha: .55)),
+                      border:
+                          Border.all(color: kPrimary.withValues(alpha: .55)),
                     ),
                     child: _HeroCopy(
                       onSearchChanged: widget.onSearchChanged,
@@ -784,9 +806,13 @@ class _HeroCopy extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Text('PROTECTIVE STYLES • RIVERDALE, MARYLAND',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: kPrimary, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 3.2)),
+        const Text('PROTECTIVE STYLES â€¢ RIVERDALE, MARYLAND',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: kPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 3.2)),
         const SizedBox(height: 22),
         Text(
           'Beautiful hair.\nMade for you.',
@@ -815,7 +841,7 @@ class _HeroCopy extends StatelessWidget {
             FilledButton.icon(
               onPressed: onBookTap,
               icon: const Icon(Icons.calendar_month_rounded),
-              label: const Text('BOOK YOUR APPOINTMENT  →'),
+              label: const Text('BOOK YOUR APPOINTMENT  â†’'),
               style: FilledButton.styleFrom(
                 backgroundColor: kPrimary,
                 foregroundColor: kInk,
@@ -854,12 +880,19 @@ class _HeroCopy extends StatelessWidget {
             onChanged: onSearchChanged,
             textInputAction: TextInputAction.search,
             decoration: const InputDecoration(
-              filled: true, fillColor: Colors.white,
+              filled: true,
+              fillColor: Colors.white,
               prefixIcon: Icon(Icons.search_rounded),
               hintText: 'Search braids, cornrows, kids styles, twists...',
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: kPrimary, width: 2)),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  borderSide: BorderSide.none),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  borderSide: BorderSide.none),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  borderSide: BorderSide(color: kPrimary, width: 2)),
             ),
           ),
         ),
@@ -960,7 +993,6 @@ class _TrustRow extends StatelessWidget {
   }
 }
 
-
 class FaithAdvertisingBanner extends StatefulWidget {
   final VoidCallback onBookTap;
 
@@ -994,7 +1026,7 @@ class _FaithAdvertisingBannerState extends State<FaithAdvertisingBanner> {
     ),
     (
       icon: Icons.location_on_rounded,
-      title: 'FAITH HAIR STYLE • RIVERDALE, MD',
+      title: 'FAITH HAIR STYLE â€¢ RIVERDALE, MD',
       message:
           'Professional protective styling for adults and kids. Browse styles, check starting prices, and request your appointment online.',
       action: 'BOOK NOW',
@@ -1304,7 +1336,8 @@ class FaithBrandSection extends StatelessWidget {
                         ),
                       ),
                       OutlinedButton.icon(
-                        onPressed: () => openUrl('https://wa.me/$whatsappNumber'),
+                        onPressed: () =>
+                            openUrl('https://wa.me/$whatsappNumber'),
                         icon: const Icon(Icons.chat_rounded),
                         label: const Text('SEND YOUR STYLE PHOTO'),
                       ),
@@ -1588,7 +1621,7 @@ class ServiceCard extends StatelessWidget {
                       ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 7),
-                        child: Text('•', style: TextStyle(color: kMuted)),
+                        child: Text('â€¢', style: TextStyle(color: kMuted)),
                       ),
                       Text(
                         duration,
@@ -1868,7 +1901,6 @@ class GalleryCard extends StatelessWidget {
   }
 }
 
-
 class AiPage extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onBook;
 
@@ -2036,7 +2068,9 @@ class _CopilotLauncher extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  hasActiveChat ? 'Continue your chat' : 'Ask your salon copilot',
+                  hasActiveChat
+                      ? 'Continue your chat'
+                      : 'Ask your salon copilot',
                   style: const TextStyle(
                     color: Color(0xFFFFD761),
                     fontSize: 10.5,
@@ -2364,7 +2398,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
                 Text(
                   _controller.isLoadingData
                       ? 'Loading live salon info...'
-                      : 'Styles • prices • colors • availability',
+                      : 'Styles â€¢ prices â€¢ colors â€¢ availability',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -2638,9 +2672,7 @@ class _MessageBubble extends StatelessWidget {
             bottomLeft: Radius.circular(isUser ? 18 : 5),
             bottomRight: Radius.circular(isUser ? 5 : 18),
           ),
-          border: isUser
-              ? null
-              : Border.all(color: AppColors.borderLight),
+          border: isUser ? null : Border.all(color: AppColors.borderLight),
         ),
         child: Column(
           crossAxisAlignment:
@@ -2818,7 +2850,7 @@ class _ColorResults extends StatelessWidget {
             border: Border.all(color: AppColors.borderGold),
           ),
           child: Text(
-            '${color.code} • ${color.name}',
+            '${color.code} â€¢ ${color.name}',
             style: const TextStyle(
               color: AppColors.navy,
               fontSize: 11,
@@ -2998,8 +3030,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
               animation: _controller,
               builder: (context, child) {
                 final delay = index * .2;
-                final progress =
-                    (_controller.value - delay).clamp(0.0, 1.0);
+                final progress = (_controller.value - delay).clamp(0.0, 1.0);
                 final offset = math.sin(progress * math.pi * 2) * -4;
 
                 return Transform.translate(
@@ -3024,7 +3055,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 }
 
 // ============================================================
-// 12. CONTROLLER — ONE PRIMARY MODEL + NATURAL VOICE
+// 12. CONTROLLER â€” ONE PRIMARY MODEL + NATURAL VOICE
 // ============================================================
 
 class FaithCopilotController extends ChangeNotifier {
@@ -3034,8 +3065,7 @@ class FaithCopilotController extends ChangeNotifier {
   FaithCopilotController._internal() {
     _messages.add(
       const ChatMessage(
-        text:
-            'Hi! I’m Faithi, your Faith Hairstyle salon copilot. '
+        text: 'Hi! Iâ€™m Faithi, your Faith Hairstyle salon copilot. '
             'Tell me the look you want, your budget, your preferred color, '
             'or when you want to come in.',
         isUser: false,
@@ -3050,8 +3080,7 @@ class FaithCopilotController extends ChangeNotifier {
   static const String _aiEndpoint = '$_apiBase/chat';
 
   // ONE MODEL ONLY. The backend should honor this model policy.
-  static const String _primaryModel =
-      'meta-llama/Llama-3.1-8B-Instruct';
+  static const String _primaryModel = 'meta-llama/Llama-3.1-8B-Instruct';
 
   final SupabaseClient _supabase = Supabase.instance.client;
   final FlutterTts _tts = FlutterTts();
@@ -3109,11 +3138,9 @@ class FaithCopilotController extends ChangeNotifier {
               .whereType<Map>()
               .map((voice) => Map<dynamic, dynamic>.from(voice))
               .where((voice) {
-                final locale =
-                    (voice['locale'] ?? '').toString().toLowerCase();
-                return locale.startsWith('en');
-              })
-              .toList();
+            final locale = (voice['locale'] ?? '').toString().toLowerCase();
+            return locale.startsWith('en');
+          }).toList();
 
           voices.sort((a, b) => _voiceScore(b).compareTo(_voiceScore(a)));
 
@@ -3257,7 +3284,7 @@ class FaithCopilotController extends ChangeNotifier {
         .replaceAll('**', '')
         .replaceAll('__', '')
         .replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '')
-        .replaceAll(RegExp(r'^[•*\-]\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'^[â€¢*\-]\s*', multiLine: true), '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
@@ -3491,8 +3518,7 @@ class FaithCopilotController extends ChangeNotifier {
         return output;
       }
 
-      if (dataframe.containsKey('name') ||
-          dataframe.containsKey('image_url')) {
+      if (dataframe.containsKey('name') || dataframe.containsKey('image_url')) {
         return [Map<String, dynamic>.from(dataframe)];
       }
     }
@@ -3720,8 +3746,7 @@ class FaithCopilotController extends ChangeNotifier {
                 r'([^a-z0-9]|$)',
           ).hasMatch(lower);
 
-      final nameMatch =
-          name.isNotEmpty && lower.contains(name.toLowerCase());
+      final nameMatch = name.isNotEmpty && lower.contains(name.toLowerCase());
 
       if (codeMatch || nameMatch) {
         final key = '$code|$name'.toLowerCase();
@@ -3740,13 +3765,11 @@ class FaithCopilotController extends ChangeNotifier {
       final localCode = (row['code'] ?? '').toString().trim();
       final localName = (row['name'] ?? '').toString().trim();
 
-      if (code.isNotEmpty &&
-          localCode.toLowerCase() == code.toLowerCase()) {
+      if (code.isNotEmpty && localCode.toLowerCase() == code.toLowerCase()) {
         return row;
       }
 
-      if (name.isNotEmpty &&
-          localName.toLowerCase() == name.toLowerCase()) {
+      if (name.isNotEmpty && localName.toLowerCase() == name.toLowerCase()) {
         return row;
       }
     }
@@ -3787,7 +3810,6 @@ class FaithCopilotController extends ChangeNotifier {
         lower.contains('open time');
   }
 
-
   void addSystemMessage(String text) {
     _messages.add(ChatMessage(text: text, isUser: false));
     notifyListeners();
@@ -3807,7 +3829,7 @@ class FaithCopilotController extends ChangeNotifier {
 
     cleaned = cleaned.replaceFirst(
       RegExp(
-        r"^(?:i['’]?m|i am)\s+(?:faith\s+ai|faithi)(?:,\s*your\s+salon\s+copilot)?[!,.:\-\s]*",
+        r"^(?:i['â€™]?m|i am)\s+(?:faith\s+ai|faithi)(?:,\s*your\s+salon\s+copilot)?[!,.:\-\s]*",
         caseSensitive: false,
       ),
       '',
@@ -4119,7 +4141,8 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
         supabase.from('marketing_settings').select().eq('id', 1).maybeSingle(),
       ]);
 
-      final loadedServices = List<Map<String, dynamic>>.from(results[0] as List);
+      final loadedServices =
+          List<Map<String, dynamic>>.from(results[0] as List);
       final loadedHistory = List<Map<String, dynamic>>.from(results[1] as List);
       final settings = results[2] as Map<String, dynamic>?;
 
@@ -4127,13 +4150,15 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
       setState(() {
         services = loadedServices;
         history = loadedHistory;
-        selectedServiceId = services.isEmpty ? null : services.first['id'].toString();
+        selectedServiceId =
+            services.isEmpty ? null : services.first['id'].toString();
         if (settings != null) {
           platform = settings['platform']?.toString() ?? platform;
           frequency = settings['frequency']?.toString() ?? frequency;
           approvalRequired = settings['approval_required'] as bool? ?? true;
           automationEnabled = settings['automation_enabled'] as bool? ?? false;
-          final parts = (settings['post_time']?.toString() ?? '10:00').split(':');
+          final parts =
+              (settings['post_time']?.toString() ?? '10:00').split(':');
           postTime = TimeOfDay(
             hour: int.tryParse(parts.first) ?? 10,
             minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
@@ -4146,7 +4171,8 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
       setState(() => loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Create the marketing tables in Supabase to save schedules and posts.'),
+          content: Text(
+              'Create the marketing tables in Supabase to save schedules and posts.'),
         ),
       );
     }
@@ -4166,14 +4192,14 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
         ? ''
         : ' starting at ${formatPrice(service['price']).replaceFirst('From ', '')}';
     final promotion = promotionController.text.trim();
-    final extras = promotion.isEmpty ? '' : '\n\n✨ $promotion';
+    final extras = promotion.isEmpty ? '' : '\n\nâœ¨ $promotion';
     final openings = [
-      'Your next beautiful look is waiting ✨',
-      'Fresh hair, fresh confidence ✨',
-      'Ready for a neat protective style? 💛',
-      'Let Faith Hair Style bring your vision to life ✨',
+      'Your next beautiful look is waiting âœ¨',
+      'Fresh hair, fresh confidence âœ¨',
+      'Ready for a neat protective style? ðŸ’›',
+      'Let Faith Hair Style bring your vision to life âœ¨',
     ];
-    final opening = openings[Random().nextInt(openings.length)];
+    final opening = openings[math.Random().nextInt(openings.length)];
     return '$opening\n\nBook $name$price with Faith Hair Style in Riverdale, Maryland.$extras\n\nChoose your appointment online, check your email for confirmation, and send a picture of the style you want through WhatsApp.\n\nBook now: ${bookingLinkController.text.trim()}\n\n#FaithHairStyle #RiverdaleMD #MarylandBraider #ProtectiveStyles #Braids';
   }
 
@@ -4228,7 +4254,8 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
         'approval_required': approvalRequired,
         'platform': platform,
         'frequency': frequency,
-        'post_time': '${postTime.hour.toString().padLeft(2, '0')}:${postTime.minute.toString().padLeft(2, '0')}:00',
+        'post_time':
+            '${postTime.hour.toString().padLeft(2, '0')}:${postTime.minute.toString().padLeft(2, '0')}:00',
         'booking_link': bookingLinkController.text.trim(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
@@ -4251,7 +4278,8 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
   }
 
   Future<void> chooseTime() async {
-    final selected = await showTimePicker(context: context, initialTime: postTime);
+    final selected =
+        await showTimePicker(context: context, initialTime: postTime);
     if (selected != null) setState(() => postTime = selected);
   }
 
@@ -4269,9 +4297,15 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Automated Marketing', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+                Text('Automated Marketing',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 6),
-                const Text('Create, approve, schedule, and track Faith Hair Style promotions.', style: TextStyle(color: kMuted)),
+                const Text(
+                    'Create, approve, schedule, and track Faith Hair Style promotions.',
+                    style: TextStyle(color: kMuted)),
                 const SizedBox(height: 16),
                 Card(
                   child: Padding(
@@ -4280,43 +4314,74 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
                       children: [
                         SwitchListTile.adaptive(
                           contentPadding: EdgeInsets.zero,
-                          title: const Text('Marketing automation', style: TextStyle(fontWeight: FontWeight.w800)),
-                          subtitle: Text(automationEnabled ? 'Automation is active' : 'Automation is paused'),
+                          title: const Text('Marketing automation',
+                              style: TextStyle(fontWeight: FontWeight.w800)),
+                          subtitle: Text(automationEnabled
+                              ? 'Automation is active'
+                              : 'Automation is paused'),
                           value: automationEnabled,
-                          onChanged: (value) => setState(() => automationEnabled = value),
+                          onChanged: (value) =>
+                              setState(() => automationEnabled = value),
                         ),
                         SwitchListTile.adaptive(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Require approval before posting'),
-                          subtitle: const Text('Recommended while testing the system.'),
+                          subtitle: const Text(
+                              'Recommended while testing the system.'),
                           value: approvalRequired,
-                          onChanged: (value) => setState(() => approvalRequired = value),
+                          onChanged: (value) =>
+                              setState(() => approvalRequired = value),
                         ),
                         const SizedBox(height: 8),
                         DropdownButtonFormField<String>(
                           initialValue: platform,
-                          decoration: const InputDecoration(labelText: 'Platform', prefixIcon: Icon(Icons.public_rounded)),
-                          items: const ['Instagram & Facebook', 'Instagram', 'Facebook'].map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
-                          onChanged: (value) => setState(() => platform = value ?? platform),
+                          decoration: const InputDecoration(
+                              labelText: 'Platform',
+                              prefixIcon: Icon(Icons.public_rounded)),
+                          items: const [
+                            'Instagram & Facebook',
+                            'Instagram',
+                            'Facebook'
+                          ]
+                              .map((value) => DropdownMenuItem(
+                                  value: value, child: Text(value)))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => platform = value ?? platform),
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           initialValue: frequency,
-                          decoration: const InputDecoration(labelText: 'Posting frequency', prefixIcon: Icon(Icons.repeat_rounded)),
-                          items: const ['Every day', '3 times a week', 'Once a week'].map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
-                          onChanged: (value) => setState(() => frequency = value ?? frequency),
+                          decoration: const InputDecoration(
+                              labelText: 'Posting frequency',
+                              prefixIcon: Icon(Icons.repeat_rounded)),
+                          items: const [
+                            'Every day',
+                            '3 times a week',
+                            'Once a week'
+                          ]
+                              .map((value) => DropdownMenuItem(
+                                  value: value, child: Text(value)))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => frequency = value ?? frequency),
                         ),
                         const SizedBox(height: 12),
                         ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.schedule_rounded, color: kPrimary),
+                          leading: const Icon(Icons.schedule_rounded,
+                              color: kPrimary),
                           title: const Text('Posting time'),
                           subtitle: Text(postTime.format(context)),
-                          trailing: OutlinedButton(onPressed: chooseTime, child: const Text('Change')),
+                          trailing: OutlinedButton(
+                              onPressed: chooseTime,
+                              child: const Text('Change')),
                         ),
                         TextField(
                           controller: bookingLinkController,
-                          decoration: const InputDecoration(labelText: 'Booking link', prefixIcon: Icon(Icons.link_rounded)),
+                          decoration: const InputDecoration(
+                              labelText: 'Booking link',
+                              prefixIcon: Icon(Icons.link_rounded)),
                         ),
                         const SizedBox(height: 14),
                         SizedBox(
@@ -4338,28 +4403,51 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Create a campaign', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                        const Text('Create a campaign',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w900)),
                         const SizedBox(height: 14),
                         DropdownButtonFormField<String>(
                           initialValue: selectedServiceId,
-                          decoration: const InputDecoration(labelText: 'Service to promote', prefixIcon: Icon(Icons.auto_awesome_rounded)),
-                          items: services.map((service) => DropdownMenuItem(value: service['id'].toString(), child: Text(service['name']?.toString() ?? 'Service'))).toList(),
-                          onChanged: (value) => setState(() => selectedServiceId = value),
+                          decoration: const InputDecoration(
+                              labelText: 'Service to promote',
+                              prefixIcon: Icon(Icons.auto_awesome_rounded)),
+                          items: services
+                              .map((service) => DropdownMenuItem(
+                                  value: service['id'].toString(),
+                                  child: Text(service['name']?.toString() ??
+                                      'Service')))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => selectedServiceId = value),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: promotionController,
                           maxLines: 2,
-                          decoration: const InputDecoration(labelText: 'Optional promotion', hintText: 'Example: \$20 off appointments booked this week', prefixIcon: Icon(Icons.local_offer_rounded)),
+                          decoration: const InputDecoration(
+                              labelText: 'Optional promotion',
+                              hintText:
+                                  'Example: \$20 off appointments booked this week',
+                              prefixIcon: Icon(Icons.local_offer_rounded)),
                         ),
                         const SizedBox(height: 14),
                         Wrap(
                           spacing: 10,
                           runSpacing: 10,
                           children: [
-                            FilledButton.icon(onPressed: generatePreview, icon: const Icon(Icons.auto_awesome_rounded), label: const Text('Generate post')),
-                            OutlinedButton.icon(onPressed: copyPost, icon: const Icon(Icons.copy_rounded), label: const Text('Copy')),
-                            OutlinedButton.icon(onPressed: saving ? null : saveDraft, icon: const Icon(Icons.save_alt_rounded), label: const Text('Save draft')),
+                            FilledButton.icon(
+                                onPressed: generatePreview,
+                                icon: const Icon(Icons.auto_awesome_rounded),
+                                label: const Text('Generate post')),
+                            OutlinedButton.icon(
+                                onPressed: copyPost,
+                                icon: const Icon(Icons.copy_rounded),
+                                label: const Text('Copy')),
+                            OutlinedButton.icon(
+                                onPressed: saving ? null : saveDraft,
+                                icon: const Icon(Icons.save_alt_rounded),
+                                label: const Text('Save draft')),
                           ],
                         ),
                         if (generatedPost.isNotEmpty) ...[
@@ -4367,8 +4455,12 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(color: kSurface, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
-                            child: SelectableText(generatedPost, style: const TextStyle(height: 1.5)),
+                            decoration: BoxDecoration(
+                                color: kSurface,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: kBorder)),
+                            child: SelectableText(generatedPost,
+                                style: const TextStyle(height: 1.5)),
                           ),
                         ],
                       ],
@@ -4376,17 +4468,29 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const Text('Recent marketing posts', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const Text('Recent marketing posts',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 10),
                 if (history.isEmpty)
-                  const EmptyState(icon: Icons.campaign_outlined, title: 'No marketing posts yet', message: 'Generate and save your first campaign above.')
+                  const EmptyState(
+                      icon: Icons.campaign_outlined,
+                      title: 'No marketing posts yet',
+                      message: 'Generate and save your first campaign above.')
                 else
                   ...history.map((post) => Card(
                         child: ListTile(
-                          leading: const CircleAvatar(backgroundColor: kSoftPink, child: Icon(Icons.campaign_rounded, color: kPrimaryDark)),
-                          title: Text(post['platform']?.toString() ?? 'Marketing post'),
-                          subtitle: Text(post['content']?.toString() ?? '', maxLines: 3, overflow: TextOverflow.ellipsis),
-                          trailing: Chip(label: Text(post['status']?.toString() ?? 'draft')),
+                          leading: const CircleAvatar(
+                              backgroundColor: kSoftPink,
+                              child: Icon(Icons.campaign_rounded,
+                                  color: kPrimaryDark)),
+                          title: Text(
+                              post['platform']?.toString() ?? 'Marketing post'),
+                          subtitle: Text(post['content']?.toString() ?? '',
+                              maxLines: 3, overflow: TextOverflow.ellipsis),
+                          trailing: Chip(
+                              label:
+                                  Text(post['status']?.toString() ?? 'draft')),
                         ),
                       )),
                 const SizedBox(height: 40),
@@ -4646,7 +4750,7 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                           icon: Icons.schedule_rounded,
                           text: start.isEmpty
                               ? 'No time'
-                              : '$start${end.isEmpty ? '' : ' – $end'}',
+                              : '$start${end.isEmpty ? '' : ' â€“ $end'}',
                         ),
                         if (phone.isNotEmpty)
                           _OwnerDetail(
@@ -5618,7 +5722,7 @@ class _BookingPageState extends State<BookingPage> {
                             return DropdownMenuItem<String>(
                               value: service['id'].toString(),
                               child: Text(
-                                '${service['name']} • ${formatPrice(service['price'])} • ${formatDuration(service['duration_minutes'])}',
+                                '${service['name']} â€¢ ${formatPrice(service['price'])} â€¢ ${formatDuration(service['duration_minutes'])}',
                                 overflow: TextOverflow.ellipsis,
                               ),
                             );
@@ -5673,7 +5777,7 @@ class _BookingPageState extends State<BookingPage> {
                               final name = color['name'].toString();
                               return DropdownMenuItem<String>(
                                 value: code,
-                                child: Text('$code • $name'),
+                                child: Text('$code â€¢ $name'),
                               );
                             }),
                           ],
@@ -5770,7 +5874,7 @@ class _BookingPageState extends State<BookingPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Choose start time • ${formatDuration(selectedServiceDurationMinutes())} service',
+                                'Choose start time â€¢ ${formatDuration(selectedServiceDurationMinutes())} service',
                                 style: const TextStyle(
                                   color: kMuted,
                                   fontWeight: FontWeight.w700,

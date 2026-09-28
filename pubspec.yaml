@@ -47,6 +47,7 @@ dependencies:
 
   # Faithi neural female voice playback
   audioplayers: ^6.7.1
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:
