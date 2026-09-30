@@ -1,11 +1,10 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
@@ -23,19 +22,27 @@ const bookingUrl =
 const heroVideoUrl =
     'https://lowqtmndtkgwmnyhqszp.supabase.co/storage/v1/object/public/faith-videos/faith-hairstyle-hero.mp4';
 
-// Faith Hair Style luxury business palette.
-const kPrimary = Color(0xFFE4AD16); // Shining salon gold
-const kPrimaryDark = Color(0xFF9A6800); // Deep gold
-const kInk = Color(0xFF071A42); // Luxury navy
-const kMuted = Color(0xFF667085); // Clean readable gray
-const kSurface = Color(0xFFF5F8FF); // Cool premium surface
-const kSoftPink = Color(0xFFFFE9A8); // Champagne gold highlight
-const kBorder = Color(0xFFD8B649); // Gold border
+// Faith Hair Style professional business palette.
+// Clean corporate blues with white and cool gray surfaces.
+const kPrimary = Color(0xFF245D9C); // Corporate blue
+const kPrimaryDark = Color(0xFF17436F); // Deep business blue
+const kInk = Color(0xFF0B1F35); // Executive navy
+const kMuted = Color(0xFF647184); // Professional slate gray
+const kSurface = Color(0xFFF5F7FA); // Neutral business surface
+const kSoftPink = Color(0xFFE9F0F7); // Legacy name: soft blue selection surface
+const kBorder = Color(0xFFD1DCE7); // Cool blue-gray border
 const kCard = Color(0xFFFFFFFF);
-const kDarkSurface = Color(0xFF0A2D6E);
-const kAccentPink = Color(0xFFB83B68);
-const kRoyalBlue = Color(0xFF0754AD);
-const kRoyalBlueBright = Color(0xFF1477DE);
+const kDarkSurface = Color(0xFF163B63);
+const kAccentPink = Color(0xFF4A79A8); // Legacy name: steel-blue accent
+const kRoyalBlue = Color(0xFF245D9C);
+const kRoyalBlueBright = Color(0xFF3B74B1);
+
+// Subtle page-background blues.
+const kBlueCloud = Color(0xFFF2F6FA);
+const kBlueMist = Color(0xFFEAF1F7);
+const kBlueIce = Color(0xFFE3EDF6);
+const kBlueGlow = Color(0xFFDCE7F2);
+const kBlueDeepGlow = Color(0xFF8FB2D5);
 
 // Booking time display settings.
 // This shows the whole business day instead of only a few fixed slots.
@@ -120,6 +127,60 @@ Future<void> openPrivateOwnerDashboard(BuildContext context) async {
   }
 }
 
+
+class FaithBluePageBackground extends StatelessWidget {
+  final Widget child;
+
+  const FaithBluePageBackground({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            kBlueCloud,
+            kBlueMist,
+            kBlueIce,
+            Color(0xFFEFF4F8),
+          ],
+          stops: [0.0, .38, .76, 1.0],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned(
+            top: -120,
+            right: -100,
+            child: IgnorePointer(
+              child: Container(
+                width: 320,
+                height: 320,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      kRoyalBlueBright.withValues(alpha: .055),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
 class FaithHairApp extends StatelessWidget {
   const FaithHairApp({super.key});
 
@@ -128,6 +189,11 @@ class FaithHairApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Faith Hair Style',
+      builder: (context, child) {
+        return FaithBluePageBackground(
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
@@ -144,24 +210,25 @@ class FaithHairApp extends StatelessWidget {
           error: Color(0xFFB3261E),
           onError: Colors.white,
         ),
-        scaffoldBackgroundColor: kSurface,
+        scaffoldBackgroundColor: Colors.transparent,
         appBarTheme: const AppBarTheme(
           elevation: 0,
           scrolledUnderElevation: 0,
-          backgroundColor: kSurface,
-          foregroundColor: kInk,
+          backgroundColor: kInk,
+          surfaceTintColor: kInk,
+          foregroundColor: Colors.white,
           centerTitle: false,
-          iconTheme: IconThemeData(color: kPrimaryDark),
-          actionsIconTheme: IconThemeData(color: kPrimaryDark),
+          iconTheme: IconThemeData(color: Colors.white),
+          actionsIconTheme: IconThemeData(color: Colors.white),
           titleTextStyle: TextStyle(
-            color: kInk,
+            color: Colors.white,
             fontSize: 20,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w900,
           ),
         ),
         navigationRailTheme: const NavigationRailThemeData(
           backgroundColor: kInk,
-          indicatorColor: kPrimary,
+          indicatorColor: kRoyalBlue,
           selectedIconTheme: IconThemeData(color: Colors.white, size: 27),
           unselectedIconTheme: IconThemeData(color: Colors.white70, size: 24),
           selectedLabelTextStyle: TextStyle(
@@ -172,18 +239,18 @@ class FaithHairApp extends StatelessWidget {
         ),
         navigationBarTheme: const NavigationBarThemeData(
           backgroundColor: kInk,
-          indicatorColor: kDarkSurface,
+          indicatorColor: kRoyalBlue,
           iconTheme: WidgetStatePropertyAll(
-            IconThemeData(color: kPrimary),
+            IconThemeData(color: Colors.white70),
           ),
           labelTextStyle: WidgetStatePropertyAll(
             TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
           ),
         ),
         cardTheme: CardThemeData(
-          color: kCard,
-          elevation: 2,
-          shadowColor: Colors.black.withValues(alpha: 0.08),
+          color: Colors.white.withValues(alpha: .96),
+          elevation: 3,
+          shadowColor: kRoyalBlue.withValues(alpha: 0.10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(22),
             side: const BorderSide(color: kBorder),
@@ -191,7 +258,7 @@ class FaithHairApp extends StatelessWidget {
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
-            backgroundColor: kPrimary,
+            backgroundColor: kRoyalBlue,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             shape: RoundedRectangleBorder(
@@ -213,7 +280,7 @@ class FaithHairApp extends StatelessWidget {
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: kInk,
-            side: const BorderSide(color: kPrimary, width: 1.4),
+            side: const BorderSide(color: kBorder, width: 1.2),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
@@ -222,19 +289,19 @@ class FaithHairApp extends StatelessWidget {
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
-            foregroundColor: kPrimaryDark,
+            foregroundColor: kRoyalBlue,
             textStyle: const TextStyle(fontWeight: FontWeight.w800),
           ),
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: kPrimary,
+          backgroundColor: kRoyalBlue,
           foregroundColor: Colors.white,
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: kCard,
-          prefixIconColor: kPrimaryDark,
-          suffixIconColor: kPrimaryDark,
+          prefixIconColor: kRoyalBlue,
+          suffixIconColor: kRoyalBlue,
           hintStyle: const TextStyle(color: kMuted),
           labelStyle: const TextStyle(color: kMuted),
           contentPadding:
@@ -249,13 +316,13 @@ class FaithHairApp extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: kPrimary, width: 1.6),
+            borderSide: const BorderSide(color: kRoyalBlue, width: 1.6),
           ),
         ),
         chipTheme: ChipThemeData(
           backgroundColor: kSoftPink,
-          selectedColor: kPrimary,
-          checkmarkColor: kInk,
+          selectedColor: Color(0xFFD7E5F3),
+          checkmarkColor: kRoyalBlue,
           labelStyle: const TextStyle(
             color: kInk,
             fontWeight: FontWeight.w700,
@@ -274,7 +341,7 @@ class FaithHairApp extends StatelessWidget {
         snackBarTheme: const SnackBarThemeData(
           backgroundColor: kInk,
           contentTextStyle: TextStyle(color: Colors.white),
-          actionTextColor: kPrimary,
+          actionTextColor: Color(0xFFBFD6EC),
           behavior: SnackBarBehavior.floating,
         ),
         dividerTheme: const DividerThemeData(
@@ -282,7 +349,7 @@ class FaithHairApp extends StatelessWidget {
           thickness: 1,
         ),
         progressIndicatorTheme: const ProgressIndicatorThemeData(
-          color: kPrimary,
+          color: kRoyalBlue,
         ),
       ),
       home: const MainPage(),
@@ -385,6 +452,7 @@ class _MainPageState extends State<MainPage> {
     final wideScreen = MediaQuery.sizeOf(context).width >= 950;
 
     final appScaffold = Scaffold(
+      backgroundColor: Colors.transparent,
       body: Row(
         children: [
           if (wideScreen)
@@ -591,8 +659,11 @@ class BusinessAppBar extends StatelessWidget implements PreferredSizeWidget {
     final wide = MediaQuery.sizeOf(context).width >= 760;
     return AppBar(
       toolbarHeight: 88,
-      backgroundColor: kRoyalBlue,
+      backgroundColor: kInk,
+      surfaceTintColor: kInk,
       foregroundColor: Colors.white,
+      elevation: 0,
+      scrolledUnderElevation: 0,
       titleSpacing: wide ? 28 : 14,
       title: Row(
         children: [
@@ -626,7 +697,7 @@ class BusinessAppBar extends StatelessWidget implements PreferredSizeWidget {
                 if (wide)
                   const Text('RIVERDALE, MARYLAND',
                       style: TextStyle(
-                          color: kPrimary,
+                          color: Color(0xFFBFD3E6),
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 2.2)),
@@ -638,12 +709,12 @@ class BusinessAppBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         IconButton(
           tooltip: 'Instagram',
-          icon: const Icon(Icons.camera_alt_rounded, color: kPrimary),
+          icon: const Icon(Icons.camera_alt_rounded, color: Colors.white),
           onPressed: () => openUrl(instagramUrl),
         ),
         IconButton(
           tooltip: 'TikTok',
-          icon: const Icon(Icons.music_note_rounded, color: kPrimary),
+          icon: const Icon(Icons.music_note_rounded, color: Colors.white),
           onPressed: () => openUrl(tiktokUrl),
         ),
         ...extraActions,
@@ -806,10 +877,10 @@ class _HeroCopy extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Text('PROTECTIVE STYLES â€¢ RIVERDALE, MARYLAND',
+        const Text('PROTECTIVE STYLES • RIVERDALE, MARYLAND',
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: kPrimary,
+                color: kBlueGlow,
                 fontSize: 14,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 3.2)),
@@ -841,7 +912,7 @@ class _HeroCopy extends StatelessWidget {
             FilledButton.icon(
               onPressed: onBookTap,
               icon: const Icon(Icons.calendar_month_rounded),
-              label: const Text('BOOK YOUR APPOINTMENT  â†’'),
+              label: const Text('BOOK YOUR APPOINTMENT  →'),
               style: FilledButton.styleFrom(
                 backgroundColor: kPrimary,
                 foregroundColor: kInk,
@@ -1026,7 +1097,7 @@ class _FaithAdvertisingBannerState extends State<FaithAdvertisingBanner> {
     ),
     (
       icon: Icons.location_on_rounded,
-      title: 'FAITH HAIR STYLE â€¢ RIVERDALE, MD',
+      title: 'FAITH HAIR STYLE • RIVERDALE, MD',
       message:
           'Professional protective styling for adults and kids. Browse styles, check starting prices, and request your appointment online.',
       action: 'BOOK NOW',
@@ -1487,8 +1558,8 @@ class CategoryBar extends StatelessWidget {
           return ChoiceChip(
             label: Text(c),
             selected: selected == c,
-            selectedColor: kSoftPink,
-            checkmarkColor: kPrimary,
+            selectedColor: const Color(0xFFDCE8F4),
+            checkmarkColor: kRoyalBlue,
             side: const BorderSide(color: kBorder),
             labelStyle: TextStyle(
               color: selected == c ? kPrimaryDark : kInk,
@@ -1578,7 +1649,7 @@ class ServiceCard extends StatelessWidget {
           Container(
             height: 218,
             width: double.infinity,
-            color: const Color(0xFFFFF4D3),
+            color: const Color(0xFFF2F5F8),
             child: image.isNotEmpty
                 ? Image.network(
                     image,
@@ -1621,7 +1692,7 @@ class ServiceCard extends StatelessWidget {
                       ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 7),
-                        child: Text('â€¢', style: TextStyle(color: kMuted)),
+                        child: Text('•', style: TextStyle(color: kMuted)),
                       ),
                       Text(
                         duration,
@@ -1849,7 +1920,7 @@ class GalleryCard extends StatelessWidget {
           Container(
             height: 226,
             width: double.infinity,
-            color: const Color(0xFFFFF4D3),
+            color: const Color(0xFFF2F5F8),
             child: Image.network(
               image,
               width: double.infinity,
@@ -2029,7 +2100,7 @@ class _CopilotLauncher extends StatelessWidget {
             colors: [AppColors.navy, AppColors.royalBlue],
           ),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.gold, width: 1.4),
+          border: Border.all(color: AppColors.borderLight, width: 1.2),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: .20),
@@ -2045,12 +2116,12 @@ class _CopilotLauncher extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: const BoxDecoration(
-                color: AppColors.gold,
+                color: Color(0xFFE6EEF7),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.auto_awesome_rounded,
-                color: AppColors.navy,
+                color: AppColors.royalBlue,
                 size: 21,
               ),
             ),
@@ -2070,9 +2141,9 @@ class _CopilotLauncher extends StatelessWidget {
                 Text(
                   hasActiveChat
                       ? 'Continue your chat'
-                      : 'Ask your salon copilot',
+                      : 'Ask your salon agent',
                   style: const TextStyle(
-                    color: Color(0xFFFFD761),
+                    color: Color(0xFFC9DDF1),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -2101,11 +2172,25 @@ class AIChatPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Faithi'),
-        backgroundColor: AppColors.navy,
+        title: const Text('Faithi Salon Agent'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         foregroundColor: Colors.white,
+        flexibleSpace: const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                AppColors.navy,
+                AppColors.deepBlue,
+                AppColors.royalBlue,
+              ],
+            ),
+          ),
+        ),
       ),
       body: SafeArea(
         child: Center(
@@ -2146,6 +2231,11 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   bool _isListening = false;
   String? _speechError;
 
+  // Every new listening session gets a new token.
+  // When voice input is stopped/sent, the token changes so late browser
+  // speech-recognition callbacks cannot keep writing into the text box.
+  int _speechSession = 0;
+
   @override
   void initState() {
     super.initState();
@@ -2163,7 +2253,8 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   @override
   void dispose() {
     _controller.removeListener(_onControllerChanged);
-    _speech.stop();
+    _speechSession++;
+    _speech.cancel();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -2192,6 +2283,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
           }
         },
         onError: (error) {
+          _speechSession++;
           if (!mounted) return;
           setState(() {
             _isListening = false;
@@ -2217,13 +2309,18 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   Future<void> _toggleListening() async {
     if (_controller.isLoading) return;
 
-    if (_isListening) {
-      await _speech.stop();
+    if (_isListening || _speech.isListening) {
+      _speechSession++;
+      try {
+        await _speech.cancel();
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() => _isListening = false);
       return;
     }
 
+    // Never let Faithi speak while the microphone is opening.
     await _controller.stopSpeaking();
 
     if (!_speechReady) {
@@ -2237,6 +2334,9 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       }
     }
 
+    final session = ++_speechSession;
+
+    if (!mounted) return;
     setState(() {
       _isListening = true;
       _speechError = null;
@@ -2246,9 +2346,17 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
       listenMode: stt.ListenMode.dictation,
       partialResults: true,
       cancelOnError: true,
+
+      // Stop naturally after a short pause instead of leaving the browser
+      // microphone open indefinitely.
+      pauseFor: const Duration(seconds: 2),
+      listenFor: const Duration(seconds: 20),
+
       onResult: (result) {
-        if (!mounted) return;
-        final words = _removeDuplicatedSpeech(result.recognizedWords.trim());
+        if (!mounted || session != _speechSession) return;
+
+        final words =
+            _removeDuplicatedSpeech(result.recognizedWords.trim());
 
         if (words.isNotEmpty) {
           _textController.value = TextEditingValue(
@@ -2258,7 +2366,12 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
         }
 
         if (result.finalResult) {
-          setState(() => _isListening = false);
+          // Invalidate any callback that arrives after the final result.
+          _speechSession++;
+
+          if (mounted) {
+            setState(() => _isListening = false);
+          }
         }
       },
     );
@@ -2275,15 +2388,61 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
     return input;
   }
 
-  void _sendMessage([String? preset]) {
+  bool _explicitProceedBooking(String text) {
+    final lower = text.toLowerCase().trim();
+
+    return lower.contains('proceed with the booking') ||
+        lower.contains('proceed with booking') ||
+        lower.contains('continue with the booking') ||
+        lower.contains('continue booking') ||
+        lower == 'book it' ||
+        lower == 'book this' ||
+        lower.contains('ready to book');
+  }
+
+  Future<void> _sendMessage([String? preset]) async {
     final text = (preset ?? _textController.text).trim();
     if (text.isEmpty || _controller.isLoading) return;
+
+    // CRITICAL:
+    // Stop browser speech recognition BEFORE the message is submitted.
+    // Otherwise it can continue listening and transcribe Faithi's own voice.
+    _speechSession++;
+
+    try {
+      if (_isListening || _speech.isListening) {
+        await _speech.cancel();
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    if (_isListening) {
+      setState(() => _isListening = false);
+    }
+
     _textController.clear();
-    _controller.sendMessage(text);
+
+    // Give Chrome a moment to release the microphone before TTS can begin.
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+
+    if (!mounted) return;
+    await _controller.sendMessage(text);
+
+    if (!mounted) return;
+
+    if (_explicitProceedBooking(text)) {
+      final draft = _controller.getBookingDraftService();
+
+      if (draft != null) {
+        widget.onBook(draft);
+        widget.onClose?.call();
+      }
+    }
   }
 
   Future<void> _openBooking() async {
-    final service = _controller.getSuggestedService();
+    final service = _controller.getBookingDraftService();
 
     if (service == null) {
       _controller.addSystemMessage(
@@ -2387,7 +2546,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'FAITHI AI COPILOT',
+                  'FAITHI SALON AGENT',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13,
@@ -2398,11 +2557,11 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
                 Text(
                   _controller.isLoadingData
                       ? 'Loading live salon info...'
-                      : 'Styles â€¢ prices â€¢ colors â€¢ availability',
+                      : 'Styles • prices • colors • booking',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFFFFD761),
+                    color: Color(0xFFC9DDF1),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -2419,7 +2578,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
                   ? Icons.volume_up_rounded
                   : Icons.volume_off_rounded,
               color: _controller.voiceEnabled
-                  ? const Color(0xFFFFD761)
+                  ? const Color(0xFFC9DDF1)
                   : Colors.white70,
               size: 21,
             ),
@@ -2468,10 +2627,10 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         children: [
           _QuickChip(
-            label: 'Choose for me',
+            label: 'Help me choose',
             icon: Icons.auto_awesome_rounded,
             onTap: () => _sendMessage(
-              'Recommend a hairstyle for me using the live Faith Hairstyle services.',
+              'Help me choose the best hairstyle for me. Ask me one useful question at a time. When I choose a style, show one matching salon photo if available.',
             ),
             isLoading: _controller.isLoading,
           ),
@@ -2479,23 +2638,54 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
           _QuickChip(
             label: 'Under my budget',
             icon: Icons.savings_outlined,
-            onTap: () =>
-                _sendMessage('Help me find a hairstyle within my budget.'),
+            onTap: () => _sendMessage(
+              'Help me find a hairstyle within my budget. Ask me my budget if I have not told you yet.',
+            ),
+            isLoading: _controller.isLoading,
+          ),
+          const SizedBox(width: 7),
+          _QuickChip(
+            label: 'Check price',
+            icon: Icons.attach_money_rounded,
+            onTap: () => _sendMessage(
+              'I want to check the price of a hairstyle. Ask which style if you do not know it yet.',
+            ),
+            isLoading: _controller.isLoading,
+          ),
+          const SizedBox(width: 7),
+          _QuickChip(
+            label: 'Show 1 photo',
+            icon: Icons.photo_outlined,
+            onTap: () => _sendMessage(
+              'Show me one photo of the hairstyle we are discussing. If no style is selected, ask me which style I want to see.',
+            ),
             isLoading: _controller.isLoading,
           ),
           const SizedBox(width: 7),
           _QuickChip(
             label: 'Colors',
             icon: Icons.palette_outlined,
-            onTap: () => _sendMessage('Show me the available hair colors.'),
+            onTap: () => _sendMessage(
+              'Help me choose a hair color from the colors currently available.',
+            ),
             isLoading: _controller.isLoading,
           ),
           const SizedBox(width: 7),
           _QuickChip(
             label: 'Open times',
             icon: Icons.schedule_rounded,
-            onTap: () =>
-                _sendMessage('Show me the next available appointment times.'),
+            onTap: () => _sendMessage(
+              'Check the next available appointment times for me.',
+            ),
+            isLoading: _controller.isLoading,
+          ),
+          const SizedBox(width: 7),
+          _QuickChip(
+            label: 'Book',
+            icon: Icons.calendar_month_rounded,
+            onTap: () => _sendMessage(
+              'I am ready to book the hairstyle we selected.',
+            ),
             isLoading: _controller.isLoading,
           ),
         ],
@@ -2581,7 +2771,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _sendMessage(),
               decoration: InputDecoration(
-                hintText: 'Ask Faithi anything...',
+                hintText: 'Tell Faithi what you want to get done...',
                 filled: true,
                 fillColor: AppColors.pageBackground,
                 contentPadding: const EdgeInsets.symmetric(
@@ -2626,8 +2816,8 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             child: FilledButton(
               onPressed: _controller.isLoading ? null : _sendMessage,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.gold,
-                foregroundColor: AppColors.navy,
+                backgroundColor: AppColors.royalBlue,
+                foregroundColor: Colors.white,
                 padding: EdgeInsets.zero,
                 shape: const CircleBorder(),
               ),
@@ -2662,7 +2852,7 @@ class _MessageBubble extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: isUser
               ? const LinearGradient(
-                  colors: [AppColors.gold, Color(0xFFF0BC27)],
+                  colors: [Color(0xFFE1ECF7), Color(0xFFD2E2F2)],
                 )
               : null,
           color: isUser ? null : Colors.white,
@@ -2850,7 +3040,7 @@ class _ColorResults extends StatelessWidget {
             border: Border.all(color: AppColors.borderGold),
           ),
           child: Text(
-            '${color.code} â€¢ ${color.name}',
+            '${color.code} • ${color.name}',
             style: const TextStyle(
               color: AppColors.navy,
               fontSize: 11,
@@ -3055,7 +3245,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 }
 
 // ============================================================
-// 12. CONTROLLER â€” ONE PRIMARY MODEL + NATURAL VOICE
+// 12. CONTROLLER — SUPABASE EDGE FUNCTION + QWEN + NATURAL VOICE
 // ============================================================
 
 class FaithCopilotController extends ChangeNotifier {
@@ -3065,22 +3255,18 @@ class FaithCopilotController extends ChangeNotifier {
   FaithCopilotController._internal() {
     _messages.add(
       const ChatMessage(
-        text: 'Hi! Iâ€™m Faithi, your Faith Hairstyle salon copilot. '
-            'Tell me the look you want, your budget, your preferred color, '
-            'or when you want to come in.',
+        text: 'Hi! I’m Faithi, your Faith Hair Style salon agent. '
+            'What would you like me to help you get done today?',
         isUser: false,
       ),
     );
   }
 
-  // CURRENT Railway production backend.
-  static const String _apiBase =
-      'https://theyoungshallgrow-api-production.up.railway.app';
+  // Deployed Supabase Edge Function.
+  static const String _edgeFunctionName = 'chat-assistant';
 
-  static const String _aiEndpoint = '$_apiBase/chat';
-
-  // ONE MODEL ONLY. The backend should honor this model policy.
-  static const String _primaryModel = 'meta-llama/Llama-3.1-8B-Instruct';
+  // The Edge Function currently routes Faithi to Qwen3-8B on Hugging Face.
+  static const String _primaryModel = 'Qwen/Qwen3-8B:fastest';
 
   final SupabaseClient _supabase = Supabase.instance.client;
   final FlutterTts _tts = FlutterTts();
@@ -3110,7 +3296,125 @@ class FaithCopilotController extends ChangeNotifier {
 
   String? lastSuggestedServiceName;
   String? lastSuggestedServiceId;
+
+  // Booking draft remembered from the conversation.
+  DateTime? preferredBookingDate;
+  String? preferredBookingStartTime;
+
   DateTime? _lastSendAt;
+
+  void _rememberBookingDateTime(String text) {
+    final value = text.trim();
+    if (value.isEmpty) return;
+
+    const months = <String, int>{
+      'january': 1,
+      'february': 2,
+      'march': 3,
+      'april': 4,
+      'may': 5,
+      'june': 6,
+      'july': 7,
+      'august': 8,
+      'september': 9,
+      'october': 10,
+      'november': 11,
+      'december': 12,
+    };
+
+    final monthFirst = RegExp(
+      r'\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,\s*|\s+)(\d{4})\b',
+      caseSensitive: false,
+    ).firstMatch(value);
+
+    final dayFirst = RegExp(
+      r'\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)(?:,\s*|\s+)(\d{4})\b',
+      caseSensitive: false,
+    ).firstMatch(value);
+
+    try {
+      if (monthFirst != null) {
+        final month = months[monthFirst.group(1)!.toLowerCase()]!;
+        final day = int.parse(monthFirst.group(2)!);
+        final year = int.parse(monthFirst.group(3)!);
+        preferredBookingDate = DateTime(year, month, day);
+      } else if (dayFirst != null) {
+        final day = int.parse(dayFirst.group(1)!);
+        final month = months[dayFirst.group(2)!.toLowerCase()]!;
+        final year = int.parse(dayFirst.group(3)!);
+        preferredBookingDate = DateTime(year, month, day);
+      }
+    } catch (_) {
+      // Ignore malformed date text.
+    }
+
+    final timeMatch = RegExp(
+      r'\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b',
+      caseSensitive: false,
+    ).firstMatch(value);
+
+    if (timeMatch != null) {
+      var hour = int.tryParse(timeMatch.group(1) ?? '') ?? 0;
+      final minute = int.tryParse(timeMatch.group(2) ?? '0') ?? 0;
+      final period = (timeMatch.group(3) ?? '').toUpperCase();
+
+      if (period == 'PM' && hour != 12) hour += 12;
+      if (period == 'AM' && hour == 12) hour = 0;
+
+      if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+        preferredBookingStartTime =
+            '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00';
+      }
+    }
+  }
+
+  bool _metaHasLiveAvailability(Map<String, dynamic> meta) {
+    final salonData = meta['salon_data'];
+    if (salonData is! Map) return false;
+
+    final raw = salonData['availability_loaded'];
+    if (raw is num) return raw.toInt() > 0;
+
+    return int.tryParse((raw ?? '').toString()) != null &&
+        int.parse((raw ?? '').toString()) > 0;
+  }
+
+  String _normalizeAvailabilityReply(
+    String reply,
+    Map<String, dynamic> meta,
+  ) {
+    if (_metaHasLiveAvailability(meta)) return reply;
+
+    final lower = reply.toLowerCase();
+    final claimsNoAvailability =
+        lower.contains('no availability') ||
+        lower.contains('availability listed') ||
+        lower.contains('cannot be confirmed at this time');
+
+    if (!claimsNoAvailability) return reply;
+
+    return 'Live availability is not loaded in Faithi chat yet. '
+        'Please choose your preferred date and time in the booking form. '
+        'Your request will be submitted as pending confirmation.';
+  }
+
+  Map<String, dynamic>? getBookingDraftService() {
+    final service = getSuggestedService();
+    if (service == null) return null;
+
+    return {
+      ...service,
+      if (preferredBookingDate != null)
+        '_preferred_booking_date':
+            '${preferredBookingDate!.year.toString().padLeft(4, '0')}-'
+                '${preferredBookingDate!.month.toString().padLeft(2, '0')}-'
+                '${preferredBookingDate!.day.toString().padLeft(2, '0')}',
+      if (preferredBookingStartTime != null)
+        '_preferred_start_time': preferredBookingStartTime,
+      if (preferences.color != null)
+        '_preferred_color': preferences.color,
+    };
+  }
 
   // ==========================================================
   // TTS / NATURAL ENGLISH VOICE
@@ -3121,7 +3425,7 @@ class FaithCopilotController extends ChangeNotifier {
 
     try {
       await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(.46);
+      await _tts.setSpeechRate(.60);
       await _tts.setPitch(1.0);
       await _tts.setVolume(1.0);
 
@@ -3242,7 +3546,7 @@ class FaithCopilotController extends ChangeNotifier {
     } catch (_) {}
   }
 
-  List<String> _speechChunks(String text, {int maxChars = 1200}) {
+  List<String> _speechChunks(String text, {int maxChars = 650}) {
     if (text.length <= maxChars) return [text];
 
     final words = text.split(RegExp(r'\s+'));
@@ -3284,7 +3588,7 @@ class FaithCopilotController extends ChangeNotifier {
         .replaceAll('**', '')
         .replaceAll('__', '')
         .replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '')
-        .replaceAll(RegExp(r'^[â€¢*\-]\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'^[•*\-]\s*', multiLine: true), '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
@@ -3343,6 +3647,7 @@ class FaithCopilotController extends ChangeNotifier {
 
     await stopSpeaking();
     preferences.extractAndRemember(cleanText);
+    _rememberBookingDateTime(cleanText);
 
     _messages.add(ChatMessage(text: cleanText, isUser: true));
 
@@ -3350,8 +3655,19 @@ class FaithCopilotController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _fetchAIResponse(cleanText);
-      final reply = _removeRepeatedGreeting(result.reply);
+      final result = await _fetchAIResponseWithRetry(cleanText);
+      final cleanedReply = _stripImageMarkupFromReply(
+        _sanitizeUnconfirmedBookingLanguage(
+          _removeRepeatedGreeting(result.reply),
+        ),
+      );
+
+      final reply = _normalizeAvailabilityReply(
+        cleanedReply,
+        result.meta,
+      );
+
+      _rememberBookingDateTime(reply);
 
       _processAIResponse(
         userText: cleanText,
@@ -3360,19 +3676,42 @@ class FaithCopilotController extends ChangeNotifier {
         meta: result.meta,
       );
 
-      await _speak(reply);
-    } catch (error) {
+      // IMPORTANT:
+      // Finish loading and paint the complete written response FIRST.
+      _isLoading = false;
+      notifyListeners();
+
+      await WidgetsBinding.instance.endOfFrame;
+      await Future<void>.delayed(
+        const Duration(milliseconds: 140),
+      );
+
+      // Voice starts only after the wording is visible.
+      if (_voiceEnabled) {
+        unawaited(_speak(reply));
+      }
+    } catch (error, stackTrace) {
+      debugPrint('FAITHI SEND ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
       const message =
-          'I could not reach the Faithi AI service right now. Please try again.';
+          'I’m having a brief service delay. Please try that again.';
 
       _messages.add(
         const ChatMessage(text: message, isUser: false),
       );
 
-      await _speak(message);
-    } finally {
       _isLoading = false;
       notifyListeners();
+
+      await WidgetsBinding.instance.endOfFrame;
+      await Future<void>.delayed(
+        const Duration(milliseconds: 140),
+      );
+
+      if (_voiceEnabled) {
+        unawaited(_speak(message));
+      }
     }
   }
 
@@ -3380,13 +3719,65 @@ class FaithCopilotController extends ChangeNotifier {
   // API
   // ==========================================================
 
+  Future<FaithiApiResult> _fetchAIResponseWithRetry(
+    String customerMessage,
+  ) async {
+    const maxAttempts = 2;
+
+    Object? lastError;
+    StackTrace? lastStackTrace;
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        if (attempt > 1) {
+          // Short pause for a temporary Edge Function / AI-provider delay.
+          await Future<void>.delayed(
+            const Duration(milliseconds: 850),
+          );
+        }
+
+        final result = await _fetchAIResponse(customerMessage);
+
+        if (_looksLikeIncompleteReply(result.reply)) {
+          throw Exception(
+            'Faithi returned an incomplete response.',
+          );
+        }
+
+        if (attempt > 1) {
+          debugPrint('FAITHI RETRY SUCCESS: attempt $attempt');
+        }
+
+        return result;
+      } catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+
+        debugPrint(
+          'FAITHI REQUEST FAILED: attempt $attempt/$maxAttempts — $error',
+        );
+
+        if (attempt == maxAttempts) {
+          break;
+        }
+      }
+    }
+
+    Error.throwWithStackTrace(
+      Exception(
+        'Faithi request failed after $maxAttempts attempts: $lastError',
+      ),
+      lastStackTrace ?? StackTrace.current,
+    );
+  }
+
   Future<FaithiApiResult> _fetchAIResponse(String customerMessage) async {
     final historySource = _messages.length > 1
         ? _messages.sublist(0, _messages.length - 1)
         : <ChatMessage>[];
 
-    final recentHistory = historySource.length > 12
-        ? historySource.sublist(historySource.length - 12)
+    final recentHistory = historySource.length > 10
+        ? historySource.sublist(historySource.length - 10)
         : historySource;
 
     final history = recentHistory
@@ -3398,75 +3789,44 @@ class FaithCopilotController extends ChangeNotifier {
         )
         .toList();
 
-    final body = {
-      'message': customerMessage,
-      'history': history,
-
-      // ONE PRIMARY MODEL ONLY.
-      'model': _primaryModel,
-      'primary_model': _primaryModel,
-      'single_model_only': true,
-
-      'domain': 'hair_salon',
-      'page': 'ai_chat',
-      'safe_mode': true,
-      'advanced_mode': true,
-      'context': {
-        'app': 'faith_hairstyle',
-        'assistant': 'faithi',
-        'backend_generation': 'v4.4+',
-        'model_policy': {
-          'primary_model': _primaryModel,
-          'single_model_only': true,
-        },
-        'response_style': {
-          'natural_conversation': true,
-          'chatgpt_like': true,
-          'context_aware': true,
-          'warm_and_professional': true,
-          'answer_directly': true,
-          'avoid_repeated_greetings': true,
-          'avoid_robotic_language': true,
-          'avoid_unnecessary_disclaimers': true,
-          'ask_follow_up_only_when_needed': true,
-          'use_conversation_history': true,
-          'use_live_salon_data_for_business_facts': true,
-          'do_not_invent_prices_services_colors_or_availability': true,
-        },
-        'customer_preferences': preferences.toMap(),
-        'frontend_capabilities': {
-          'service_images': true,
-          'booking_navigation': true,
-          'voice_input': true,
-          'voice_output': true,
-        },
-      },
-    };
-
-    final response = await http
-        .post(
-          Uri.parse(_aiEndpoint),
-          headers: const {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
+    final response = await _supabase.functions
+        .invoke(
+          _edgeFunctionName,
+          body: {
+            'message': customerMessage,
+            'history': history,
+            'customer_preferences': preferences.toMap(),
           },
-          body: jsonEncode(body),
         )
-        .timeout(const Duration(seconds: 45));
+        .timeout(
+          const Duration(seconds: 35),
+          onTimeout: () {
+            throw TimeoutException(
+              'Faithi Edge Function took longer than 35 seconds.',
+            );
+          },
+        );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.status < 200 || response.status >= 300) {
       throw Exception(
-        'Faithi server returned ${response.statusCode}: ${response.body}',
+        'Faithi Edge Function returned status ${response.status}.',
       );
     }
 
-    final dynamic decoded = jsonDecode(response.body);
+    dynamic decoded = response.data;
+
+    // Normally Supabase already returns decoded JSON.
+    // This fallback also accepts a JSON string.
+    if (decoded is String && decoded.trim().isNotEmpty) {
+      decoded = jsonDecode(decoded);
+    }
 
     if (decoded is! Map) {
       throw Exception('Invalid Faithi response.');
     }
 
     final reply = (decoded['reply'] ?? '').toString().trim();
+
     if (reply.isEmpty) {
       throw Exception('Faithi returned no reply.');
     }
@@ -3477,7 +3837,11 @@ class FaithCopilotController extends ChangeNotifier {
         ? Map<String, dynamic>.from(decoded['meta'])
         : <String, dynamic>{};
 
-    return FaithiApiResult(reply: reply, rows: rows, meta: meta);
+    return FaithiApiResult(
+      reply: reply,
+      rows: rows,
+      meta: meta,
+    );
   }
 
   // ==========================================================
@@ -3533,6 +3897,82 @@ class FaithCopilotController extends ChangeNotifier {
     return [];
   }
 
+  String _stripImageMarkupFromReply(String text) {
+    var cleaned = text;
+
+    // Faithi images are rendered by the Flutter UI as real image cards.
+    // Never show Markdown image syntax such as:
+    // ![Fulani Braids](https://...jpeg)
+    cleaned = cleaned.replaceAll(
+      RegExp(
+        r'!\[[^\]]*\]\((?:https?:\/\/)[^)]+\)',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // Also remove a raw service-image URL if the model prints it directly.
+    cleaned = cleaned.replaceAll(
+      RegExp(
+        r'https?:\/\/\S*service-images\/\S+\.(?:jpg|jpeg|png|webp)(?:\?\S*)?',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // Remove excessive blank lines left behind after deleting the URL.
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\n[ \t]*\n[ \t]*\n+'),
+      '\n\n',
+    );
+
+    return cleaned.trim();
+  }
+
+  String _sanitizeUnconfirmedBookingLanguage(String text) {
+    var cleaned = text.trim();
+
+    // Faithi chat can prepare booking details, but the appointment is not
+    // actually confirmed until the booking flow creates the booking record.
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\bare confirmed for\b', caseSensitive: false),
+      'are selected for',
+    );
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\bis confirmed for\b', caseSensitive: false),
+      'is selected for',
+    );
+    cleaned = cleaned.replaceAll(
+      RegExp(
+        r'\byour appointment (?:has been|is) confirmed\b',
+        caseSensitive: false,
+      ),
+      'your appointment details are ready',
+    );
+
+    return cleaned;
+  }
+
+  bool _looksLikeIncompleteReply(String text) {
+    final value = text.trim();
+    if (value.isEmpty) return true;
+
+    // Detect obvious cut-offs such as "Here", "and", "with", etc.
+    if (!RegExp(r'[.!?]$').hasMatch(value) &&
+        RegExp(
+          r'\b(?:here|and|or|with|for|to|the|a|an|of|in|on|at|because|but)\s*$',
+          caseSensitive: false,
+        ).hasMatch(value)) {
+      return true;
+    }
+
+    // Unbalanced bold markers usually mean the generated answer was cut off.
+    final boldMarkers = RegExp(r'\*\*').allMatches(value).length;
+    if (boldMarkers.isOdd) return true;
+
+    return false;
+  }
+
   // ==========================================================
   // PROCESS BACKEND RESULT
   // ==========================================================
@@ -3543,6 +3983,9 @@ class FaithCopilotController extends ChangeNotifier {
     required List<Map<String, dynamic>> structuredRows,
     required Map<String, dynamic> meta,
   }) {
+    _showBookingButton = false;
+
+    final previousSelectedService = getSuggestedService();
     final serviceMatches = <Map<String, dynamic>>[];
     final colorMatches = <HairColorResult>[];
     final seenServices = <String>{};
@@ -3552,7 +3995,8 @@ class FaithCopilotController extends ChangeNotifier {
       final table =
           (row['_table'] ?? row['source_table'] ?? '').toString().toLowerCase();
 
-      final name = (row['name'] ?? '').toString().trim();
+      final name =
+          (row['name'] ?? row['service_name'] ?? '').toString().trim();
       final imageUrl = (row['image_url'] ?? '').toString().trim();
       final code = (row['code'] ?? row['detail'] ?? '').toString().trim();
 
@@ -3565,7 +4009,12 @@ class FaithCopilotController extends ChangeNotifier {
         final key = '$code|$name'.toLowerCase();
 
         if (seenColors.add(key)) {
-          colorMatches.add(HairColorResult(code: code, name: name));
+          colorMatches.add(
+            HairColorResult(
+              code: code,
+              name: name,
+            ),
+          );
         }
         continue;
       }
@@ -3583,12 +4032,117 @@ class FaithCopilotController extends ChangeNotifier {
       }
     }
 
-    if (serviceMatches.isEmpty) {
-      serviceMatches.addAll(_findServicesFromText(reply));
+    // If Faithi names an EXACT live salon service in its reply,
+    // prefer that exact service over a broader/incorrect structured match.
+    // Example: a reply saying "Fulani Braids" must never display
+    // a "BOOK FEED-IN BRAIDS" button.
+    final replyLooksLikeChoiceQuestion =
+        reply.contains('?') &&
+        (reply.toLowerCase().contains(' or ') ||
+            reply.toLowerCase().contains('would you like') ||
+            reply.toLowerCase().contains('which'));
+
+    // Exact full salon-service names are safe to use for VISUAL alignment,
+    // even when Faithi is asking a question.
+    //
+    // Example:
+    // "Feed-In Braids start at $120 ... Extra small knotless with coil..."
+    // must show one of THOSE services if a photo is shown. It must never
+    // substitute Cornrows just because Cornrows also belong to the braid family.
+    final exactReplyServices = _findServicesFromText(reply);
+    final exactUserServices = _findServicesFromText(userText);
+
+    if (exactReplyServices.isNotEmpty) {
+      serviceMatches
+        ..clear()
+        ..addAll(exactReplyServices);
+    } else if (exactUserServices.isNotEmpty) {
+      serviceMatches
+        ..clear()
+        ..addAll(exactUserServices);
     }
 
-    if (serviceMatches.isEmpty) {
-      serviceMatches.addAll(_findServicesFromText(userText));
+    // If the customer simply says "show me a picture", keep using
+    // the service already selected in the conversation.
+    // If the customer picked a broad style family such as "twists",
+    // choose a real active service from the loaded salon services.
+    if (exactReplyServices.isEmpty &&
+        exactUserServices.isEmpty &&
+        _isStyleSelectionIntent(userText)) {
+      final lower = userText.toLowerCase();
+      final family = lower.contains('twist')
+          ? 'twist'
+          : lower.contains('braid') ||
+                  lower.contains('knotless') ||
+                  lower.contains('cornrow') ||
+                  lower.contains('senegalese') ||
+                  lower.contains('boho') ||
+                  lower.contains('goddess')
+              ? 'braid'
+              : lower.contains('loc')
+                  ? 'loc'
+                  : lower.contains('pony')
+                      ? 'pony'
+                      : '';
+
+      if (family.isNotEmpty) {
+        final familyMatches = services.where((service) {
+          final name = (service['name'] ?? '').toString().toLowerCase();
+          final category = (service['category'] ?? '').toString().toLowerCase();
+          final description =
+              (service['description'] ?? '').toString().toLowerCase();
+
+          if (family == 'braid') {
+            // Do not use Cornrows as a generic stand-in for "braids".
+            // If Cornrows are intended, the customer or Faithi should
+            // explicitly name Cornrows.
+            if (name.contains('cornrow') || category.contains('cornrow')) {
+              return false;
+            }
+
+            return name.contains('braid') ||
+                name.contains('knotless') ||
+                name.contains('senegalese') ||
+                name.contains('boho') ||
+                name.contains('goddess') ||
+                category.contains('braid') ||
+                description.contains('braid');
+          }
+
+          return name.contains(family) ||
+              category.contains(family) ||
+              description.contains(family);
+        }).toList();
+
+        if (familyMatches.isNotEmpty) {
+          familyMatches.sort((a, b) {
+            final aHasImage =
+                (a['image_url'] ?? '').toString().trim().isNotEmpty ? 0 : 1;
+            final bHasImage =
+                (b['image_url'] ?? '').toString().trim().isNotEmpty ? 0 : 1;
+            return aHasImage.compareTo(bHasImage);
+          });
+
+          serviceMatches
+            ..clear()
+            ..add(familyMatches.first);
+        }
+      }
+    }
+
+    if (_isColorIntent(userText) &&
+        exactUserServices.isEmpty &&
+        previousSelectedService != null) {
+      serviceMatches
+        ..clear()
+        ..add(previousSelectedService);
+    }
+
+    if (serviceMatches.isEmpty && _isImageIntent(userText)) {
+      final selected = getSuggestedService();
+      if (selected != null) {
+        serviceMatches.add(selected);
+      }
     }
 
     if (colorMatches.isEmpty && _isColorIntent(userText)) {
@@ -3610,20 +4164,29 @@ class FaithCopilotController extends ChangeNotifier {
 
     final images = <ServiceImageAttachment>[];
 
-    for (final service in serviceMatches) {
-      final imageUrl = (service['image_url'] ?? '').toString().trim();
-      if (!_isHttpUrl(imageUrl)) continue;
+    // Do not flood customers with pictures.
+    // Attach at most ONE image, and only from the exact service context
+    // established by the customer/Faithi in this turn.
+    final shouldAttachOneImage =
+        _isImageIntent(userText) || _isStyleSelectionIntent(userText);
 
-      images.add(
-        ServiceImageAttachment(
-          serviceId: service['id']?.toString(),
-          serviceName: (service['name'] ?? 'Hairstyle').toString(),
-          url: imageUrl,
-          price: _money(service['price']),
-        ),
-      );
+    if (shouldAttachOneImage) {
+      for (final service in serviceMatches) {
+        final imageUrl = (service['image_url'] ?? '').toString().trim();
 
-      if (images.length >= 3) break;
+        if (!_isHttpUrl(imageUrl)) continue;
+
+        images.add(
+          ServiceImageAttachment(
+            serviceId: service['id']?.toString(),
+            serviceName: (service['name'] ?? 'Hairstyle').toString(),
+            url: imageUrl,
+            price: _money(service['price']),
+          ),
+        );
+
+        break;
+      }
     }
 
     _messages.add(
@@ -3635,7 +4198,22 @@ class FaithCopilotController extends ChangeNotifier {
       ),
     );
 
-    if (serviceMatches.isNotEmpty) {
+    final userExplicitlySelectedService = exactUserServices.isNotEmpty;
+    final replyHasOneUnambiguousService =
+        exactReplyServices.length == 1 && !replyLooksLikeChoiceQuestion;
+    final continuingPreviousService =
+        previousSelectedService != null &&
+        (_isColorIntent(userText) ||
+            _isImageIntent(userText) ||
+            _isBookingIntent(userText));
+
+    // Only make a service the active booking selection when the choice is
+    // actually unambiguous. A representative photo for "braids" must not
+    // silently become the booked service.
+    if (serviceMatches.isNotEmpty &&
+        (userExplicitlySelectedService ||
+            replyHasOneUnambiguousService ||
+            continuingPreviousService)) {
       final selected = serviceMatches.first;
       lastSuggestedServiceName = selected['name']?.toString();
       lastSuggestedServiceId = selected['id']?.toString();
@@ -3643,12 +4221,14 @@ class FaithCopilotController extends ChangeNotifier {
 
     final intent = (meta['intent'] ?? '').toString().toLowerCase();
 
-    if (_isBookingIntent(userText) ||
-        _isBookingIntent(reply) ||
-        intent == 'booking' ||
-        serviceMatches.isNotEmpty) {
-      _showBookingButton =
-          serviceMatches.isNotEmpty || getSuggestedService() != null;
+    if (userExplicitlySelectedService ||
+        replyHasOneUnambiguousService ||
+        continuingPreviousService) {
+      _showBookingButton = getSuggestedService() != null;
+    } else if ((_isBookingIntent(userText) ||
+            intent == 'booking') &&
+        getSuggestedService() != null) {
+      _showBookingButton = true;
     }
   }
 
@@ -3695,6 +4275,51 @@ class FaithCopilotController extends ChangeNotifier {
     return matches.take(5).toList();
   }
 
+  bool _isStyleSelectionIntent(String text) {
+    final lower = text.toLowerCase().trim();
+
+    const styleWords = [
+      'twist',
+      'twists',
+      'braid',
+      'braids',
+      'knotless',
+      'cornrow',
+      'cornrows',
+      'senegalese',
+      'spring twist',
+      'passion twist',
+      'boho',
+      'goddess',
+      'pony tail',
+      'ponytail',
+      'loc',
+      'locs',
+    ];
+
+    return styleWords.any((word) =>
+        lower == word ||
+        lower.startsWith('$word ') ||
+        lower.endsWith(' $word') ||
+        lower.contains(' $word '));
+  }
+
+  bool _isImageIntent(String text) {
+    final lower = text.toLowerCase().trim();
+
+    return lower.contains('picture') ||
+        lower.contains('photo') ||
+        lower.contains('image') ||
+        lower.contains('show me') ||
+        lower.contains('let me see') ||
+        lower.contains('what does it look like') ||
+        lower == 'another' ||
+        lower.contains('another one') ||
+        lower.contains('show another') ||
+        lower.contains('next photo') ||
+        lower.contains('next picture');
+  }
+
   bool _isColorIntent(String text) {
     final lower = text.toLowerCase();
 
@@ -3711,6 +4336,10 @@ class FaithCopilotController extends ChangeNotifier {
         lower.contains('blue') ||
         lower.contains('green') ||
         lower.contains('mahogany') ||
+        lower.contains('bold') ||
+        lower.contains('ombre') ||
+        lower.contains('ombré') ||
+        lower.trim() == 'natural' ||
         RegExp(
           r'\b(?:1b|99j|613|350|425|530|t1b\/\w+)\b',
           caseSensitive: false,
@@ -3813,7 +4442,12 @@ class FaithCopilotController extends ChangeNotifier {
   void addSystemMessage(String text) {
     _messages.add(ChatMessage(text: text, isUser: false));
     notifyListeners();
-    _speak(text);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_voiceEnabled) {
+        unawaited(_speak(text));
+      }
+    });
   }
 
   String _removeRepeatedGreeting(String text) {
@@ -3829,7 +4463,7 @@ class FaithCopilotController extends ChangeNotifier {
 
     cleaned = cleaned.replaceFirst(
       RegExp(
-        r"^(?:i['â€™]?m|i am)\s+(?:faith\s+ai|faithi)(?:,\s*your\s+salon\s+copilot)?[!,.:\-\s]*",
+        r"^(?:i['’]?m|i am)\s+(?:faith\s+ai|faithi)(?:,\s*your\s+(?:faith\s+hair\s+style\s+)?salon\s+(?:copilot|agent))?[!,.:\-\s]*",
         caseSensitive: false,
       ),
       '',
@@ -4037,15 +4671,18 @@ class CustomerPreferences {
 // ============================================================
 
 class AppColors {
-  static const Color navy = Color(0xFF071A42);
-  static const Color deepBlue = Color(0xFF0A2D6E);
-  static const Color royalBlue = Color(0xFF0754AD);
-  static const Color gold = Color(0xFFE4AD16);
-  static const Color deepGold = Color(0xFF9A6800);
-  static const Color pageBackground = Color(0xFFF6F8FC);
-  static const Color borderGold = Color(0xFFD8B649);
-  static const Color borderLight = Color(0xFFE6EAF2);
-  static const Color muted = Color(0xFF667085);
+  static const Color navy = Color(0xFF0B1F35);
+  static const Color deepBlue = Color(0xFF163B63);
+  static const Color royalBlue = Color(0xFF245D9C);
+
+  // Legacy property names retained so the rest of the AI UI stays stable.
+  // They now use professional blue tones instead of gold/yellow.
+  static const Color gold = Color(0xFF2F6FAE);
+  static const Color deepGold = Color(0xFF1C4E7D);
+  static const Color pageBackground = Color(0xFFF5F7FA);
+  static const Color borderGold = Color(0xFFD1DCE7);
+  static const Color borderLight = Color(0xFFE2E8EF);
+  static const Color muted = Color(0xFF647184);
 }
 
 class OwnerDashboardPage extends StatelessWidget {
@@ -4057,12 +4694,26 @@ class OwnerDashboardPage extends StatelessWidget {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: kInk,
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
           foregroundColor: Colors.white,
+          flexibleSpace: const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  kInk,
+                  kDarkSurface,
+                  kRoyalBlue,
+                ],
+              ),
+            ),
+          ),
           title: const Text('Owner Dashboard'),
           bottom: const TabBar(
-            indicatorColor: kPrimary,
-            labelColor: kPrimary,
+            indicatorColor: Colors.white,
+            labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
             tabs: [
               Tab(
@@ -4192,12 +4843,12 @@ class _OwnerMarketingPageState extends State<OwnerMarketingPage> {
         ? ''
         : ' starting at ${formatPrice(service['price']).replaceFirst('From ', '')}';
     final promotion = promotionController.text.trim();
-    final extras = promotion.isEmpty ? '' : '\n\nâœ¨ $promotion';
+    final extras = promotion.isEmpty ? '' : '\n\n✨ $promotion';
     final openings = [
-      'Your next beautiful look is waiting âœ¨',
-      'Fresh hair, fresh confidence âœ¨',
-      'Ready for a neat protective style? ðŸ’›',
-      'Let Faith Hair Style bring your vision to life âœ¨',
+      'Your next beautiful look is waiting ✨',
+      'Fresh hair, fresh confidence ✨',
+      'Ready for a neat protective style? 💛',
+      'Let Faith Hair Style bring your vision to life ✨',
     ];
     final opening = openings[math.Random().nextInt(openings.length)];
     return '$opening\n\nBook $name$price with Faith Hair Style in Riverdale, Maryland.$extras\n\nChoose your appointment online, check your email for confirmation, and send a picture of the style you want through WhatsApp.\n\nBook now: ${bookingLinkController.text.trim()}\n\n#FaithHairStyle #RiverdaleMD #MarylandBraider #ProtectiveStyles #Braids';
@@ -4750,7 +5401,7 @@ class _OwnerBookingsPageState extends State<OwnerBookingsPage> {
                           icon: Icons.schedule_rounded,
                           text: start.isEmpty
                               ? 'No time'
-                              : '$start${end.isEmpty ? '' : ' â€“ $end'}',
+                              : '$start${end.isEmpty ? '' : ' – $end'}',
                         ),
                         if (phone.isNotEmpty)
                           _OwnerDetail(
@@ -5470,16 +6121,73 @@ class _BookingPageState extends State<BookingPage> {
   @override
   void initState() {
     super.initState();
-    selectedService = widget.initialService;
     servicesFuture = getServices();
     hairColorsFuture = getHairColors();
+    _applyBookingDraft(widget.initialService, notify: false);
   }
 
   @override
   void didUpdateWidget(covariant BookingPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.initialService != oldWidget.initialService) {
-      setState(() => selectedService = widget.initialService);
+      _applyBookingDraft(widget.initialService);
+    }
+  }
+
+  void _applyBookingDraft(
+    Map<String, dynamic>? draft, {
+    bool notify = true,
+  }) {
+    void apply() {
+      selectedService = draft;
+
+      if (draft == null) return;
+
+      final dateText =
+          (draft['_preferred_booking_date'] ?? '').toString().trim();
+      if (dateText.isNotEmpty) {
+        final parsedDate = DateTime.tryParse(dateText);
+        if (parsedDate != null) {
+          selectedDate = parsedDate;
+          slotsFuture = getSlots(parsedDate);
+        }
+      }
+
+      final preferredTime =
+          (draft['_preferred_start_time'] ?? '').toString().trim();
+      if (preferredTime.isNotEmpty) {
+        selectedStartTime = preferredTime;
+
+        final pieces = preferredTime.split(':');
+        if (pieces.length >= 2) {
+          final hour = int.tryParse(pieces[0]) ?? 0;
+          final minute = int.tryParse(pieces[1]) ?? 0;
+          final baseDate = selectedDate ?? DateTime.now();
+
+          final start = DateTime(
+            baseDate.year,
+            baseDate.month,
+            baseDate.day,
+            hour,
+            minute,
+          );
+
+          selectedEndTime =
+              timeToSql(start.add(Duration(minutes: selectedServiceDurationMinutes())));
+        }
+      }
+
+      final preferredColor =
+          (draft['_preferred_color'] ?? '').toString().trim();
+      if (preferredColor.isNotEmpty) {
+        selectedHairColorCode = preferredColor;
+      }
+    }
+
+    if (notify && mounted) {
+      setState(apply);
+    } else {
+      apply();
     }
   }
 
@@ -5511,10 +6219,27 @@ class _BookingPageState extends State<BookingPage> {
   }
 
   Future<List<Map<String, dynamic>>> getSlots(DateTime date) async {
-    // Generate a full list of start times for the business day.
-    // The end time is calculated from the selected service duration.
-    // This means customers see many time choices instead of only a few fixed slots.
+    // The booking form is the source of truth for availability.
+    // Generate the business-day starts, then remove times that overlap
+    // existing pending/confirmed bookings.
     final durationMinutes = selectedServiceDurationMinutes();
+
+    final dateSql = dateToSql(date);
+
+    List<Map<String, dynamic>> existingBookings = [];
+    try {
+      final rows = await supabase
+          .from('bookings')
+          .select('start_time,end_time,status')
+          .eq('booking_date', dateSql)
+          .inFilter('status', ['pending', 'confirmed']);
+
+      existingBookings = List<Map<String, dynamic>>.from(rows);
+    } catch (_) {
+      // If the bookings lookup fails, keep the form usable rather than
+      // claiming there is no availability.
+      existingBookings = [];
+    }
     final startOfDay = DateTime(
       date.year,
       date.month,
@@ -5537,15 +6262,60 @@ class _BookingPageState extends State<BookingPage> {
       // Do not show a start time if the service would finish after closing time.
       if (end.isAfter(endOfDay)) break;
 
-      slots.add({
-        'start_time': timeToSql(start),
-        'end_time': timeToSql(end),
-      });
+      final startSql = timeToSql(start);
+      final endSql = timeToSql(end);
+
+      bool overlapsExisting = false;
+
+      for (final booking in existingBookings) {
+        final existingStartText =
+            (booking['start_time'] ?? '').toString().trim();
+        final existingEndText =
+            (booking['end_time'] ?? '').toString().trim();
+
+        final existingStart = _dateTimeFromSqlTime(date, existingStartText);
+        final existingEnd = _dateTimeFromSqlTime(date, existingEndText);
+
+        if (existingStart == null || existingEnd == null) continue;
+
+        final overlaps =
+            start.isBefore(existingEnd) && end.isAfter(existingStart);
+
+        if (overlaps) {
+          overlapsExisting = true;
+          break;
+        }
+      }
+
+      if (!overlapsExisting) {
+        slots.add({
+          'start_time': startSql,
+          'end_time': endSql,
+        });
+      }
 
       start = start.add(const Duration(minutes: bookingIntervalMinutes));
     }
 
     return slots;
+  }
+
+  DateTime? _dateTimeFromSqlTime(DateTime date, String value) {
+    final parts = value.split(':');
+    if (parts.length < 2) return null;
+
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+
+    if (hour == null || minute == null) return null;
+
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      hour,
+      minute,
+    );
   }
 
   int selectedServiceDurationMinutes() {
@@ -5722,7 +6492,7 @@ class _BookingPageState extends State<BookingPage> {
                             return DropdownMenuItem<String>(
                               value: service['id'].toString(),
                               child: Text(
-                                '${service['name']} â€¢ ${formatPrice(service['price'])} â€¢ ${formatDuration(service['duration_minutes'])}',
+                                '${service['name']} • ${formatPrice(service['price'])} • ${formatDuration(service['duration_minutes'])}',
                                 overflow: TextOverflow.ellipsis,
                               ),
                             );
@@ -5777,7 +6547,7 @@ class _BookingPageState extends State<BookingPage> {
                               final name = color['name'].toString();
                               return DropdownMenuItem<String>(
                                 value: code,
-                                child: Text('$code â€¢ $name'),
+                                child: Text('$code • $name'),
                               );
                             }),
                           ],
@@ -5861,6 +6631,27 @@ class _BookingPageState extends State<BookingPage> {
                           }
 
                           final slots = snap.data ?? [];
+
+                          if (selectedStartTime != null &&
+                              slots.isNotEmpty &&
+                              !slots.any((slot) =>
+                                  slot['start_time'].toString() ==
+                                  selectedStartTime)) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!mounted) return;
+                              if (selectedStartTime == null) return;
+
+                              setState(() {
+                                selectedStartTime = null;
+                                selectedEndTime = null;
+                              });
+
+                              showMessage(
+                                'That requested time is not available. Please choose another time.',
+                              );
+                            });
+                          }
+
                           if (slots.isEmpty) {
                             return const EmptyState(
                               icon: Icons.event_busy_rounded,
@@ -5874,7 +6665,7 @@ class _BookingPageState extends State<BookingPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Choose start time â€¢ ${formatDuration(selectedServiceDurationMinutes())} service',
+                                'Choose start time • ${formatDuration(selectedServiceDurationMinutes())} service',
                                 style: const TextStyle(
                                   color: kMuted,
                                   fontWeight: FontWeight.w700,
