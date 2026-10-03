@@ -1,4 +1,7 @@
 ﻿import { createClient } from "npm:@supabase/supabase-js@2";
+import { ChatOpenAI } from "npm:@langchain/openai@1";
+import { StateGraph, StateSchema, START, END } from "npm:@langchain/langgraph@1";
+import * as z from "npm:zod@4";
 
 // ============================================================
 // FAITHI SALON AGENT — SUPABASE EDGE FUNCTION
@@ -27,8 +30,11 @@ const corsHeaders = {
 // Hugging Face automatically chooses the fastest available provider.
 const MODEL = "Qwen/Qwen3-8B:fastest";
 
+const HF_BASE_URL =
+  "https://router.huggingface.co/v1";
+
 const HF_ENDPOINT =
-  "https://router.huggingface.co/v1/chat/completions";
+  `${HF_BASE_URL}/chat/completions`;
 
 // ============================================================
 // FAITHI SYSTEM PROMPT
@@ -425,12 +431,12 @@ When the customer is ready:
 
 STOP recommending alternatives.
 
-Confirm the important selections briefly and guide them toward booking.
+Confirm the important selections briefly. When the customer has clearly chosen to proceed and the required booking information is available, perform the booking directly through the agent action system instead of sending the customer to another page.
 
 Example:
 
 "Perfect. You're choosing Medium Senegalese Twists in color 1B.
-I'll help you continue to booking."
+I'll take care of the booking with you here."
 
 Do not ask for information already known.
 
@@ -662,6 +668,33 @@ If an appointment cannot be uniquely matched to the customer, ask for
 one identifying detail at a time instead of guessing.
 
 ============================================================
+AGENT ACTION EXECUTION
+============================================================
+
+Faithi can perform real customer-service actions through LangGraph.
+
+Supported customer actions include:
+
+- create a booking
+- find the customer's own booking
+- check booking status
+- cancel the customer's own booking
+- reschedule the customer's own booking
+- update the customer's own booking details such as service, color, name, email, or notes
+
+For any action that changes a booking:
+
+- use only information the customer actually provided or clearly confirmed
+- never invent consent
+- never invent identity, phone number, email, booking ID, service, date, time, or color
+- ask only ONE missing question at a time
+- do not claim an action was completed unless the AGENT ACTION RESULT says performed=true
+- if an action is blocked because a slot is unavailable, offer a real live alternative
+- protect customer privacy and never reveal another customer's personal information
+
+When all required information is available and the customer clearly wants the action, perform it. Do not make the customer open another page or repeat information unnecessarily.
+
+============================================================
 FINAL AGENT RULE
 ============================================================
 
@@ -715,6 +748,12 @@ function detectIntent(text: string): string {
       "appointment",
       "schedule",
       "reserve",
+      "cancel",
+      "reschedule",
+      "booking status",
+      "my booking",
+      "change my booking",
+      "move my appointment",
     ])
   ) {
     return "booking";
@@ -1040,6 +1079,1455 @@ async function loadAppointmentRows(
 }
 
 // ============================================================
+// LANGCHAIN + LANGGRAPH AGENT HELPERS
+// ============================================================
+
+const AGENT_ACTIONS = [
+  "conversation",
+  "find_booking",
+  "create_booking",
+  "cancel_booking",
+  "reschedule_booking",
+  "update_booking",
+] as const;
+
+type AgentAction = typeof AGENT_ACTIONS[number];
+
+type AgentPlan = {
+  action: AgentAction;
+  customer_name?: string;
+  phone?: string;
+  email?: string;
+  service_id?: string;
+  service_name?: string;
+  booking_id?: string;
+  booking_date?: string;
+  start_time?: string;
+  new_date?: string;
+  new_start_time?: string;
+  hair_color_code?: string;
+  notes?: string;
+  reason?: string;
+};
+
+type AgentActionResult = {
+  action: AgentAction;
+  performed: boolean;
+  status: "not_needed" | "needs_input" | "completed" | "blocked" | "error";
+  message: string;
+  missing_fields?: string[];
+  rows?: Record<string, unknown>[];
+  booking_id?: string;
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(
+    JSON.stringify(body),
+    {
+      status,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+}
+
+function textFromLangChainContent(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return cleanString(content);
+
+  return content
+    .map((part: any) => {
+      if (typeof part === "string") return part;
+      if (part?.type === "text") return cleanString(part.text);
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+function normalizePhone(value: unknown): string {
+  let digits = cleanString(value).replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) {
+    digits = digits.slice(1);
+  }
+  return digits;
+}
+
+function normalizeEmail(value: unknown): string {
+  return cleanString(value).toLowerCase();
+}
+
+function normalizeDbTime(value: unknown): string {
+  const raw = cleanString(value);
+  if (!raw) return "";
+
+  const twelveHour = raw.match(
+    /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i,
+  );
+
+  if (twelveHour) {
+    let hour = Number(twelveHour[1]);
+    const minute = Number(twelveHour[2] ?? "0");
+    const suffix = twelveHour[3].toLowerCase();
+
+    if (hour < 1 || hour > 12 || minute < 0 || minute > 59) {
+      return "";
+    }
+
+    if (suffix === "pm" && hour !== 12) hour += 12;
+    if (suffix === "am" && hour === 12) hour = 0;
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+  }
+
+  const twentyFourHour = raw.match(
+    /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/,
+  );
+
+  if (twentyFourHour) {
+    const hour = Number(twentyFourHour[1]);
+    const minute = Number(twentyFourHour[2]);
+    const second = Number(twentyFourHour[3] ?? "0");
+
+    if (
+      hour >= 0 && hour <= 23 &&
+      minute >= 0 && minute <= 59 &&
+      second >= 0 && second <= 59
+    ) {
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
+    }
+  }
+
+  return "";
+}
+
+function displayDbTime(value: unknown): string {
+  const normalized = normalizeDbTime(value);
+  if (!normalized) return cleanString(value);
+
+  const [hourText, minute] = normalized.split(":");
+  let hour = Number(hourText);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  hour %= 12;
+  if (hour === 0) hour = 12;
+  return `${hour}:${minute} ${suffix}`;
+}
+
+function addMinutesToTime(value: unknown, minutes: number): string {
+  const normalized = normalizeDbTime(value);
+  if (!normalized) return "";
+
+  const [hour, minute] = normalized.split(":").map(Number);
+  const total = hour * 60 + minute + minutes;
+  const wrapped = ((total % 1440) + 1440) % 1440;
+  const endHour = Math.floor(wrapped / 60);
+  const endMinute = wrapped % 60;
+
+  return `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}:00`;
+}
+
+function addDaysToIsoDate(isoDate: string, days: number): string {
+  const parsed = new Date(`${isoDate}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return "";
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function resolveDateExpression(
+  value: unknown,
+  salonClock: ReturnType<typeof getSalonClock>,
+): string {
+  const raw = cleanString(value);
+  if (!raw) return "";
+
+  const exact = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (exact) return exact[1];
+
+  const lower = raw.toLowerCase().trim();
+  if (lower === "today") return salonClock.isoDate;
+  if (lower === "tomorrow") return addDaysToIsoDate(salonClock.isoDate, 1);
+
+  const weekdays: Record<string, number> = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+
+  const weekday = Object.keys(weekdays).find((day) => lower.includes(day));
+  if (weekday) {
+    const base = new Date(`${salonClock.isoDate}T12:00:00Z`);
+    if (!Number.isNaN(base.getTime())) {
+      const todayDay = base.getUTCDay();
+      let delta = (weekdays[weekday] - todayDay + 7) % 7;
+      if (lower.includes("next ") && delta === 0) delta = 7;
+      return addDaysToIsoDate(salonClock.isoDate, delta);
+    }
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function extractFirstJsonObject(text: string): Record<string, unknown> | null {
+  const cleaned = removeThinking(text)
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  try {
+    const direct = JSON.parse(cleaned);
+    if (direct && typeof direct === "object" && !Array.isArray(direct)) {
+      return direct as Record<string, unknown>;
+    }
+  } catch (_) {
+    // Continue to brace extraction.
+  }
+
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+
+  try {
+    const parsed = JSON.parse(cleaned.slice(start, end + 1));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch (_) {
+    return null;
+  }
+
+  return null;
+}
+
+function normalizeAgentPlan(value: unknown): AgentPlan {
+  const source = value && typeof value === "object"
+    ? value as Record<string, unknown>
+    : {};
+
+  const rawAction = cleanString(source.action).toLowerCase();
+  const action = AGENT_ACTIONS.includes(rawAction as AgentAction)
+    ? rawAction as AgentAction
+    : "conversation";
+
+  const plan: AgentPlan = { action };
+
+  const stringFields = [
+    "customer_name",
+    "phone",
+    "email",
+    "service_id",
+    "service_name",
+    "booking_id",
+    "booking_date",
+    "start_time",
+    "new_date",
+    "new_start_time",
+    "hair_color_code",
+    "notes",
+    "reason",
+  ] as const;
+
+  for (const key of stringFields) {
+    const valueText = cleanString(source[key]);
+    if (valueText) plan[key] = valueText;
+  }
+
+  return plan;
+}
+
+async function loadActiveServicesForAgent(supabase: any) {
+  const { data, error } = await supabase
+    .from("services")
+    .select(
+      "id,name,category,description,price,duration_minutes,image_url,is_active",
+    )
+    .eq("is_active", true)
+    .order("price", { ascending: true })
+    .limit(150);
+
+  if (error) throw new Error(error.message);
+  return Array.isArray(data) ? data : [];
+}
+
+async function resolveServiceForAgent(
+  supabase: any,
+  serviceId?: string,
+  serviceName?: string,
+) {
+  const id = cleanString(serviceId);
+  if (id) {
+    const { data, error } = await supabase
+      .from("services")
+      .select(
+        "id,name,category,description,price,duration_minutes,image_url,is_active",
+      )
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!error && data && data.is_active !== false) return data;
+  }
+
+  const wanted = cleanString(serviceName).toLowerCase();
+  if (!wanted) return null;
+
+  const services = await loadActiveServicesForAgent(supabase);
+
+  const exact = services.find(
+    (service: any) => cleanString(service.name).toLowerCase() === wanted,
+  );
+  if (exact) return exact;
+
+  const contains = services.find((service: any) => {
+    const name = cleanString(service.name).toLowerCase();
+    return name.includes(wanted) || wanted.includes(name);
+  });
+  if (contains) return contains;
+
+  const words = wanted.split(/\s+/).filter((word) => word.length >= 3);
+  return services.find((service: any) => {
+    const name = cleanString(service.name).toLowerCase();
+    return words.length > 0 && words.every((word) => name.includes(word));
+  }) ?? null;
+}
+
+async function validateHairColorForAgent(
+  supabase: any,
+  code: string,
+) {
+  const wanted = cleanString(code);
+  if (!wanted) return null;
+
+  const { data, error } = await supabase
+    .from("hair_colors")
+    .select("code,name,is_active")
+    .eq("code", wanted)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data;
+}
+
+async function hasBookingConflictForAgent(
+  supabase: any,
+  bookingDate: string,
+  startTime: string,
+  excludeBookingId?: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("id,booking_date,start_time,status")
+    .eq("booking_date", bookingDate)
+    .limit(250);
+
+  if (error) throw new Error(error.message);
+
+  const normalizedTime = normalizeDbTime(startTime);
+
+  return (Array.isArray(data) ? data : []).some((row: any) => {
+    if (
+      excludeBookingId &&
+      cleanString(row.id) === cleanString(excludeBookingId)
+    ) {
+      return false;
+    }
+
+    const status = cleanString(row.status).toLowerCase();
+    if (["cancelled", "canceled", "declined"].includes(status)) return false;
+
+    return normalizeDbTime(row.start_time) === normalizedTime;
+  });
+}
+
+async function findDuplicateBookingForAgent(
+  supabase: any,
+  phone: string,
+  serviceId: string,
+  bookingDate: string,
+  startTime: string,
+) {
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) return null;
+
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("booking_date", bookingDate)
+    .eq("service_id", serviceId)
+    .limit(100);
+
+  if (error) return null;
+
+  return (Array.isArray(data) ? data : []).find((row: any) => {
+    const status = cleanString(row.status).toLowerCase();
+    if (["cancelled", "canceled", "declined"].includes(status)) return false;
+
+    return normalizePhone(row.phone) === normalizedPhone &&
+      normalizeDbTime(row.start_time) === normalizeDbTime(startTime);
+  }) ?? null;
+}
+
+type SlotCheck = {
+  slot: Record<string, unknown> | null;
+  dateHasManagedSlots: boolean;
+  tableAvailable: boolean;
+};
+
+async function findMatchingOpenSlotForAgent(
+  supabase: any,
+  date: string,
+  startTime: string,
+): Promise<SlotCheck> {
+  const normalizedStart = normalizeDbTime(startTime);
+
+  const { data, error } = await supabase
+    .from("availability_slots")
+    .select("*")
+    .eq("slot_date", date)
+    .limit(150);
+
+  if (error) {
+    return {
+      slot: null,
+      dateHasManagedSlots: false,
+      tableAvailable: false,
+    };
+  }
+
+  const allRows = Array.isArray(data) ? data : [];
+  const openRows = allRows.filter((row: any) => row.is_available === true);
+  const slot = openRows.find(
+    (row: any) => normalizeDbTime(row.start_time) === normalizedStart,
+  ) ?? null;
+
+  return {
+    slot,
+    dateHasManagedSlots: allRows.length > 0,
+    tableAvailable: true,
+  };
+}
+
+async function claimAvailabilitySlotForAgent(
+  supabase: any,
+  slot: Record<string, unknown> | null,
+) {
+  if (!slot?.id) return { claimed: true, row: null };
+
+  const { data, error } = await supabase
+    .from("availability_slots")
+    .update({ is_available: false })
+    .eq("id", slot.id)
+    .eq("is_available", true)
+    .select("*")
+    .maybeSingle();
+
+  if (error || !data) {
+    return { claimed: false, row: null };
+  }
+
+  return { claimed: true, row: data };
+}
+
+async function releaseAvailabilitySlotForAgent(
+  supabase: any,
+  date: unknown,
+  startTime: unknown,
+) {
+  const targetDate = normalizeDateOnly(date);
+  const targetTime = normalizeDbTime(startTime);
+  if (!targetDate || !targetTime) return;
+
+  try {
+    await supabase
+      .from("availability_slots")
+      .update({ is_available: true })
+      .eq("slot_date", targetDate)
+      .eq("start_time", targetTime);
+  } catch (_) {
+    // Non-fatal. Booking state remains authoritative.
+  }
+}
+
+async function enrichBookingForAgent(supabase: any, row: any) {
+  let serviceName = "";
+  let price: unknown = null;
+
+  if (row?.service_id) {
+    const { data } = await supabase
+      .from("services")
+      .select("name,price")
+      .eq("id", row.service_id)
+      .maybeSingle();
+
+    if (data) {
+      serviceName = cleanString(data.name);
+      price = data.price;
+    }
+  }
+
+  return {
+    source_table: "bookings",
+    id: row?.id,
+    customer_name: cleanString(row?.customer_name),
+    service_id: row?.service_id,
+    service_name: serviceName,
+    price,
+    booking_date: row?.booking_date,
+    start_time: row?.start_time,
+    end_time: row?.end_time,
+    hair_color_code: row?.hair_color_code,
+    status: row?.status,
+    notes: row?.notes,
+  };
+}
+
+async function findOwnBookingsForAgent(
+  supabase: any,
+  phone?: string,
+  email?: string,
+  bookingId?: string,
+) {
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedEmail = normalizeEmail(email);
+  const id = cleanString(bookingId);
+
+  if (!normalizedPhone && !normalizedEmail) {
+    return [];
+  }
+
+  let query = supabase
+    .from("bookings")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (id) query = query.eq("id", id);
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const matched = (Array.isArray(data) ? data : []).filter((row: any) => {
+    const phoneMatches = normalizedPhone &&
+      normalizePhone(row.phone) === normalizedPhone;
+    const emailMatches = normalizedEmail &&
+      normalizeEmail(row.email) === normalizedEmail;
+    return Boolean(phoneMatches || emailMatches);
+  });
+
+  return await Promise.all(
+    matched.slice(0, 10).map((row: any) => enrichBookingForAgent(supabase, row)),
+  );
+}
+
+async function fetchVerifiedBookingForAgent(
+  supabase: any,
+  bookingId: string,
+  phone: string,
+) {
+  const id = cleanString(bookingId);
+  const normalizedPhone = normalizePhone(phone);
+  if (!id || !normalizedPhone) return null;
+
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  if (normalizePhone(data.phone) !== normalizedPhone) return null;
+  return data;
+}
+
+async function createBookingForAgent(
+  supabase: any,
+  plan: AgentPlan,
+  salonClock: ReturnType<typeof getSalonClock>,
+): Promise<AgentActionResult> {
+  const missing: string[] = [];
+  const customerName = cleanString(plan.customer_name);
+  const phone = cleanString(plan.phone);
+  const targetDate = resolveDateExpression(plan.booking_date, salonClock);
+  const targetTime = normalizeDbTime(plan.start_time);
+
+  if (!customerName) missing.push("full name");
+  if (normalizePhone(phone).length < 10) missing.push("phone number");
+  if (!cleanString(plan.service_id) && !cleanString(plan.service_name)) {
+    missing.push("service");
+  }
+  if (!targetDate) missing.push("appointment date");
+  if (!targetTime) missing.push("appointment time");
+
+  if (missing.length > 0) {
+    return {
+      action: "create_booking",
+      performed: false,
+      status: "needs_input",
+      message: `Booking is not ready yet. Ask for ${missing[0]}.`,
+      missing_fields: missing,
+      rows: [],
+    };
+  }
+
+  if (targetDate < salonClock.isoDate) {
+    return {
+      action: "create_booking",
+      performed: false,
+      status: "blocked",
+      message: "The requested appointment date is in the past. Ask for a future date.",
+      rows: [],
+    };
+  }
+
+  const service = await resolveServiceForAgent(
+    supabase,
+    plan.service_id,
+    plan.service_name,
+  );
+
+  if (!service) {
+    return {
+      action: "create_booking",
+      performed: false,
+      status: "blocked",
+      message: "The requested service could not be matched to an active Faith Hair Style service. Ask the customer to choose an offered service.",
+      rows: [],
+    };
+  }
+
+  const colorCode = cleanString(plan.hair_color_code);
+  if (colorCode) {
+    const color = await validateHairColorForAgent(supabase, colorCode);
+    if (!color) {
+      return {
+        action: "create_booking",
+        performed: false,
+        status: "blocked",
+        message: `Hair color ${colorCode} is not confirmed as available. Ask the customer to choose an available color.`,
+        rows: [],
+      };
+    }
+  }
+
+  const duplicate = await findDuplicateBookingForAgent(
+    supabase,
+    phone,
+    cleanString(service.id),
+    targetDate,
+    targetTime,
+  );
+
+  if (duplicate) {
+    const safe = await enrichBookingForAgent(supabase, duplicate);
+    return {
+      action: "create_booking",
+      performed: true,
+      status: "completed",
+      message: `This booking already exists as booking ${cleanString(duplicate.id)}. Do not create a duplicate.`,
+      booking_id: cleanString(duplicate.id),
+      rows: [safe],
+    };
+  }
+
+  const conflict = await hasBookingConflictForAgent(
+    supabase,
+    targetDate,
+    targetTime,
+  );
+
+  if (conflict) {
+    return {
+      action: "create_booking",
+      performed: false,
+      status: "blocked",
+      message: "That appointment time is already booked. Offer another live opening.",
+      rows: [],
+    };
+  }
+
+  const slotCheck = await findMatchingOpenSlotForAgent(
+    supabase,
+    targetDate,
+    targetTime,
+  );
+
+  if (
+    slotCheck.tableAvailable &&
+    slotCheck.dateHasManagedSlots &&
+    !slotCheck.slot
+  ) {
+    return {
+      action: "create_booking",
+      performed: false,
+      status: "blocked",
+      message: "That time is not an available salon slot. Check the live availability and offer a listed opening.",
+      rows: [],
+    };
+  }
+
+  const claim = await claimAvailabilitySlotForAgent(supabase, slotCheck.slot);
+  if (!claim.claimed) {
+    return {
+      action: "create_booking",
+      performed: false,
+      status: "blocked",
+      message: "That appointment slot was just taken. Check the live availability again and offer another opening.",
+      rows: [],
+    };
+  }
+
+  const duration = Number(service.duration_minutes);
+  const slotEnd = normalizeDbTime((slotCheck.slot as any)?.end_time);
+  const endTime = slotEnd || addMinutesToTime(
+    targetTime,
+    Number.isFinite(duration) && duration > 0 ? duration : 60,
+  );
+
+  const payload = {
+    customer_name: customerName,
+    phone,
+    email: cleanString(plan.email),
+    service_id: service.id,
+    booking_date: targetDate,
+    start_time: targetTime,
+    end_time: endTime,
+    status: "pending",
+    hair_color_code: colorCode || null,
+    notes: cleanString(plan.notes),
+  };
+
+  const { data: booking, error } = await supabase
+    .from("bookings")
+    .insert(payload)
+    .select("*")
+    .single();
+
+  if (error || !booking) {
+    if (slotCheck.slot) {
+      await releaseAvailabilitySlotForAgent(
+        supabase,
+        targetDate,
+        targetTime,
+      );
+    }
+
+    console.error("AGENT CREATE BOOKING ERROR:", error);
+
+    return {
+      action: "create_booking",
+      performed: false,
+      status: "error",
+      message: "The booking could not be saved right now. Ask the customer to try again in a moment.",
+      rows: [],
+    };
+  }
+
+  const safe = await enrichBookingForAgent(supabase, booking);
+
+  return {
+    action: "create_booking",
+    performed: true,
+    status: "completed",
+    message: `Booking ${cleanString(booking.id)} was created successfully for ${cleanString(service.name)} on ${targetDate} at ${displayDbTime(targetTime)}. It is pending confirmation.`,
+    booking_id: cleanString(booking.id),
+    rows: [safe],
+  };
+}
+
+async function findBookingForAgent(
+  supabase: any,
+  plan: AgentPlan,
+): Promise<AgentActionResult> {
+  if (!normalizePhone(plan.phone) && !normalizeEmail(plan.email)) {
+    return {
+      action: "find_booking",
+      performed: false,
+      status: "needs_input",
+      message: "To protect privacy, ask for the phone number or email used for the booking.",
+      missing_fields: ["phone number or email"],
+      rows: [],
+    };
+  }
+
+  try {
+    const rows = await findOwnBookingsForAgent(
+      supabase,
+      plan.phone,
+      plan.email,
+      plan.booking_id,
+    );
+
+    return {
+      action: "find_booking",
+      performed: true,
+      status: "completed",
+      message: rows.length > 0
+        ? `Found ${rows.length} matching booking(s).`
+        : "No matching booking was found with those details.",
+      rows,
+    };
+  } catch (error) {
+    console.error("AGENT FIND BOOKING ERROR:", error);
+    return {
+      action: "find_booking",
+      performed: false,
+      status: "error",
+      message: "The booking could not be checked right now. Ask the customer to try again in a moment.",
+      rows: [],
+    };
+  }
+}
+
+async function cancelBookingForAgent(
+  supabase: any,
+  plan: AgentPlan,
+): Promise<AgentActionResult> {
+  const missing: string[] = [];
+  if (!cleanString(plan.booking_id)) missing.push("booking ID");
+  if (normalizePhone(plan.phone).length < 10) missing.push("booking phone number");
+
+  if (missing.length > 0) {
+    return {
+      action: "cancel_booking",
+      performed: false,
+      status: "needs_input",
+      message: `Cancellation needs ${missing[0]}.`,
+      missing_fields: missing,
+      rows: [],
+    };
+  }
+
+  const booking = await fetchVerifiedBookingForAgent(
+    supabase,
+    cleanString(plan.booking_id),
+    cleanString(plan.phone),
+  );
+
+  if (!booking) {
+    return {
+      action: "cancel_booking",
+      performed: false,
+      status: "blocked",
+      message: "The booking could not be verified with that booking ID and phone number.",
+      rows: [],
+    };
+  }
+
+  const currentStatus = cleanString(booking.status).toLowerCase();
+  if (["cancelled", "canceled"].includes(currentStatus)) {
+    return {
+      action: "cancel_booking",
+      performed: true,
+      status: "completed",
+      message: "That booking is already cancelled.",
+      rows: [await enrichBookingForAgent(supabase, booking)],
+      booking_id: cleanString(booking.id),
+    };
+  }
+
+  const { data: updated, error } = await supabase
+    .from("bookings")
+    .update({ status: "cancelled" })
+    .eq("id", booking.id)
+    .select("*")
+    .single();
+
+  if (error || !updated) {
+    console.error("AGENT CANCEL BOOKING ERROR:", error);
+    return {
+      action: "cancel_booking",
+      performed: false,
+      status: "error",
+      message: "The booking could not be cancelled right now. Ask the customer to try again in a moment.",
+      rows: [],
+    };
+  }
+
+  await releaseAvailabilitySlotForAgent(
+    supabase,
+    booking.booking_date,
+    booking.start_time,
+  );
+
+  return {
+    action: "cancel_booking",
+    performed: true,
+    status: "completed",
+    message: `Booking ${cleanString(booking.id)} has been cancelled.`,
+    booking_id: cleanString(booking.id),
+    rows: [await enrichBookingForAgent(supabase, updated)],
+  };
+}
+
+async function rescheduleBookingForAgent(
+  supabase: any,
+  plan: AgentPlan,
+  salonClock: ReturnType<typeof getSalonClock>,
+): Promise<AgentActionResult> {
+  const missing: string[] = [];
+  const bookingId = cleanString(plan.booking_id);
+  const phone = cleanString(plan.phone);
+  const targetDate = resolveDateExpression(plan.new_date, salonClock);
+  const targetTime = normalizeDbTime(plan.new_start_time);
+
+  if (!bookingId) missing.push("booking ID");
+  if (normalizePhone(phone).length < 10) missing.push("booking phone number");
+  if (!targetDate) missing.push("new appointment date");
+  if (!targetTime) missing.push("new appointment time");
+
+  if (missing.length > 0) {
+    return {
+      action: "reschedule_booking",
+      performed: false,
+      status: "needs_input",
+      message: `Rescheduling needs ${missing[0]}.`,
+      missing_fields: missing,
+      rows: [],
+    };
+  }
+
+  if (targetDate < salonClock.isoDate) {
+    return {
+      action: "reschedule_booking",
+      performed: false,
+      status: "blocked",
+      message: "The new appointment date cannot be in the past.",
+      rows: [],
+    };
+  }
+
+  const booking = await fetchVerifiedBookingForAgent(
+    supabase,
+    bookingId,
+    phone,
+  );
+
+  if (!booking) {
+    return {
+      action: "reschedule_booking",
+      performed: false,
+      status: "blocked",
+      message: "The booking could not be verified with that booking ID and phone number.",
+      rows: [],
+    };
+  }
+
+  const conflict = await hasBookingConflictForAgent(
+    supabase,
+    targetDate,
+    targetTime,
+    bookingId,
+  );
+
+  if (conflict) {
+    return {
+      action: "reschedule_booking",
+      performed: false,
+      status: "blocked",
+      message: "The requested new time is already booked. Offer another live opening.",
+      rows: [],
+    };
+  }
+
+  const slotCheck = await findMatchingOpenSlotForAgent(
+    supabase,
+    targetDate,
+    targetTime,
+  );
+
+  if (
+    slotCheck.tableAvailable &&
+    slotCheck.dateHasManagedSlots &&
+    !slotCheck.slot
+  ) {
+    return {
+      action: "reschedule_booking",
+      performed: false,
+      status: "blocked",
+      message: "The requested new time is not an available salon slot. Check live availability and offer another opening.",
+      rows: [],
+    };
+  }
+
+  const claim = await claimAvailabilitySlotForAgent(supabase, slotCheck.slot);
+  if (!claim.claimed) {
+    return {
+      action: "reschedule_booking",
+      performed: false,
+      status: "blocked",
+      message: "That new appointment slot was just taken. Check live availability again.",
+      rows: [],
+    };
+  }
+
+  let durationMinutes = 60;
+  const { data: service } = await supabase
+    .from("services")
+    .select("duration_minutes")
+    .eq("id", booking.service_id)
+    .maybeSingle();
+
+  if (service && Number(service.duration_minutes) > 0) {
+    durationMinutes = Number(service.duration_minutes);
+  }
+
+  const slotEnd = normalizeDbTime((slotCheck.slot as any)?.end_time);
+  const newEndTime = slotEnd || addMinutesToTime(targetTime, durationMinutes);
+
+  const oldDate = booking.booking_date;
+  const oldTime = booking.start_time;
+
+  const { data: updated, error } = await supabase
+    .from("bookings")
+    .update({
+      booking_date: targetDate,
+      start_time: targetTime,
+      end_time: newEndTime,
+      status: "pending",
+    })
+    .eq("id", booking.id)
+    .select("*")
+    .single();
+
+  if (error || !updated) {
+    if (slotCheck.slot) {
+      await releaseAvailabilitySlotForAgent(supabase, targetDate, targetTime);
+    }
+
+    console.error("AGENT RESCHEDULE BOOKING ERROR:", error);
+
+    return {
+      action: "reschedule_booking",
+      performed: false,
+      status: "error",
+      message: "The booking could not be rescheduled right now. Ask the customer to try again in a moment.",
+      rows: [],
+    };
+  }
+
+  await releaseAvailabilitySlotForAgent(supabase, oldDate, oldTime);
+
+  return {
+    action: "reschedule_booking",
+    performed: true,
+    status: "completed",
+    message: `Booking ${bookingId} has been moved to ${targetDate} at ${displayDbTime(targetTime)} and is pending confirmation.`,
+    booking_id: bookingId,
+    rows: [await enrichBookingForAgent(supabase, updated)],
+  };
+}
+
+async function updateBookingForAgent(
+  supabase: any,
+  plan: AgentPlan,
+): Promise<AgentActionResult> {
+  const missing: string[] = [];
+  const bookingId = cleanString(plan.booking_id);
+  const phone = cleanString(plan.phone);
+
+  if (!bookingId) missing.push("booking ID");
+  if (normalizePhone(phone).length < 10) missing.push("booking phone number");
+
+  if (missing.length > 0) {
+    return {
+      action: "update_booking",
+      performed: false,
+      status: "needs_input",
+      message: `Updating the booking needs ${missing[0]}.`,
+      missing_fields: missing,
+      rows: [],
+    };
+  }
+
+  const booking = await fetchVerifiedBookingForAgent(
+    supabase,
+    bookingId,
+    phone,
+  );
+
+  if (!booking) {
+    return {
+      action: "update_booking",
+      performed: false,
+      status: "blocked",
+      message: "The booking could not be verified with that booking ID and phone number.",
+      rows: [],
+    };
+  }
+
+  const updates: Record<string, unknown> = {};
+
+  if (cleanString(plan.customer_name)) {
+    updates.customer_name = cleanString(plan.customer_name);
+  }
+
+  if (plan.email !== undefined) {
+    updates.email = cleanString(plan.email);
+  }
+
+  if (plan.notes !== undefined) {
+    updates.notes = cleanString(plan.notes);
+  }
+
+  if (cleanString(plan.hair_color_code)) {
+    const color = await validateHairColorForAgent(
+      supabase,
+      cleanString(plan.hair_color_code),
+    );
+
+    if (!color) {
+      return {
+        action: "update_booking",
+        performed: false,
+        status: "blocked",
+        message: `Hair color ${cleanString(plan.hair_color_code)} is not confirmed as available.`,
+        rows: [],
+      };
+    }
+
+    updates.hair_color_code = cleanString(plan.hair_color_code);
+  }
+
+  if (cleanString(plan.service_id) || cleanString(plan.service_name)) {
+    const service = await resolveServiceForAgent(
+      supabase,
+      plan.service_id,
+      plan.service_name,
+    );
+
+    if (!service) {
+      return {
+        action: "update_booking",
+        performed: false,
+        status: "blocked",
+        message: "The requested replacement service is not an active Faith Hair Style service.",
+        rows: [],
+      };
+    }
+
+    updates.service_id = service.id;
+
+    const duration = Number(service.duration_minutes);
+    if (Number.isFinite(duration) && duration > 0) {
+      updates.end_time = addMinutesToTime(booking.start_time, duration);
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return {
+      action: "update_booking",
+      performed: false,
+      status: "needs_input",
+      message: "Ask what booking detail the customer wants to change, such as service, hair color, name, email, or notes.",
+      missing_fields: ["detail to update"],
+      rows: [],
+    };
+  }
+
+  const { data: updated, error } = await supabase
+    .from("bookings")
+    .update(updates)
+    .eq("id", booking.id)
+    .select("*")
+    .single();
+
+  if (error || !updated) {
+    console.error("AGENT UPDATE BOOKING ERROR:", error);
+    return {
+      action: "update_booking",
+      performed: false,
+      status: "error",
+      message: "The booking could not be updated right now. Ask the customer to try again in a moment.",
+      rows: [],
+    };
+  }
+
+  return {
+    action: "update_booking",
+    performed: true,
+    status: "completed",
+    message: `Booking ${bookingId} was updated successfully.`,
+    booking_id: bookingId,
+    rows: [await enrichBookingForAgent(supabase, updated)],
+  };
+}
+
+async function executeAgentAction(
+  supabase: any,
+  plan: AgentPlan,
+  salonClock: ReturnType<typeof getSalonClock>,
+): Promise<AgentActionResult> {
+  try {
+    switch (plan.action) {
+      case "find_booking":
+        return await findBookingForAgent(supabase, plan);
+      case "create_booking":
+        return await createBookingForAgent(supabase, plan, salonClock);
+      case "cancel_booking":
+        return await cancelBookingForAgent(supabase, plan);
+      case "reschedule_booking":
+        return await rescheduleBookingForAgent(supabase, plan, salonClock);
+      case "update_booking":
+        return await updateBookingForAgent(supabase, plan);
+      default:
+        return {
+          action: "conversation",
+          performed: false,
+          status: "not_needed",
+          message: "No write action is needed for this request.",
+          rows: [],
+        };
+    }
+  } catch (error) {
+    console.error("AGENT ACTION ERROR:", error);
+    return {
+      action: plan.action,
+      performed: false,
+      status: "error",
+      message: "I could not complete that action right now. Ask the customer to try again in a moment.",
+      rows: [],
+    };
+  }
+}
+
+async function buildAgentPlan(
+  model: ChatOpenAI,
+  customerMessage: string,
+  history: Record<string, unknown>[],
+  customerPreferences: Record<string, unknown>,
+  salonClock: ReturnType<typeof getSalonClock>,
+  services: Record<string, unknown>[],
+  availability: Record<string, unknown>[],
+): Promise<AgentPlan> {
+  const plannerPrompt = `
+You are the private action planner for Faithi, the Faith Hair Style salon agent.
+Return ONLY one JSON object. Do not write prose before or after it.
+
+Allowed action values:
+- conversation
+- find_booking
+- create_booking
+- cancel_booking
+- reschedule_booking
+- update_booking
+
+Choose conversation for normal questions, recommendations, prices, colors, pictures, hours, policies, preparation, or availability questions when no booking record should be changed.
+
+Choose create_booking only when the customer clearly wants Faithi to actually submit/create/book an appointment.
+Choose find_booking when the customer wants to check an existing booking or booking status.
+Choose cancel_booking only when the customer clearly wants an existing booking cancelled.
+Choose reschedule_booking only when the customer clearly wants an existing booking moved to another date/time.
+Choose update_booking when the customer wants an existing booking detail changed without changing date/time, such as service, hair color, name, email, or notes.
+
+Never invent customer identity, phone, email, booking ID, service, date, time, color, or consent.
+Use the conversation history to understand short replies like "yes", "10", "Saturday", "1B", or "book it".
+A prior assistant suggestion is NOT customer consent by itself.
+For relative dates, convert them using the current salon date when confident; otherwise leave the field empty.
+When a value is unknown, omit it from the JSON instead of guessing.
+
+Current salon date/time:
+${JSON.stringify(salonClock)}
+
+Known customer preferences:
+${JSON.stringify(customerPreferences)}
+
+Active services:
+${JSON.stringify(services.map((service) => ({
+    id: service.id,
+    name: service.name,
+    price: service.price,
+    duration_minutes: service.duration_minutes,
+  })).slice(0, 100))}
+
+Current open availability:
+${JSON.stringify(availability.slice(0, 30))}
+
+Recent conversation history:
+${JSON.stringify(history.slice(-10))}
+
+Current customer message:
+${customerMessage}
+
+JSON fields you may use:
+{
+  "action": "conversation|find_booking|create_booking|cancel_booking|reschedule_booking|update_booking",
+  "customer_name": "",
+  "phone": "",
+  "email": "",
+  "service_id": "",
+  "service_name": "",
+  "booking_id": "",
+  "booking_date": "YYYY-MM-DD or natural date",
+  "start_time": "time",
+  "new_date": "YYYY-MM-DD or natural date",
+  "new_start_time": "time",
+  "hair_color_code": "",
+  "notes": "",
+  "reason": "short internal reason"
+}
+`;
+
+  try {
+    const response = await model.invoke([
+      {
+        role: "system",
+        content: "You are a strict JSON action planner. Output JSON only.",
+      },
+      {
+        role: "user",
+        content: plannerPrompt,
+      },
+    ]);
+
+    const raw = textFromLangChainContent(response.content);
+    const parsed = extractFirstJsonObject(raw);
+    return normalizeAgentPlan(parsed);
+  } catch (error) {
+    console.error("AGENT PLAN ERROR:", error);
+    return { action: "conversation" };
+  }
+}
+
+const AgentGraphState = new StateSchema({
+  customerMessage: z.string(),
+  plan: z.any().optional(),
+  actionResult: z.any().optional(),
+  reply: z.string().optional(),
+});
+
+async function runFaithiLangGraphAgent({
+  supabase,
+  model,
+  customerMessage,
+  history,
+  customerPreferences,
+  salonClock,
+  services,
+  availability,
+  liveSalonContext,
+}: {
+  supabase: any;
+  model: ChatOpenAI;
+  customerMessage: string;
+  history: Record<string, unknown>[];
+  customerPreferences: Record<string, unknown>;
+  salonClock: ReturnType<typeof getSalonClock>;
+  services: Record<string, unknown>[];
+  availability: Record<string, unknown>[];
+  liveSalonContext: string;
+}) {
+  const workflow = new StateGraph(AgentGraphState)
+    .addNode(
+      "plan",
+      async () => ({
+        plan: await buildAgentPlan(
+          model,
+          customerMessage,
+          history,
+          customerPreferences,
+          salonClock,
+          services,
+          availability,
+        ),
+      }),
+      { retryPolicy: { maxAttempts: 2 } },
+    )
+    .addNode(
+      "execute",
+      async (state) => ({
+        actionResult: await executeAgentAction(
+          supabase,
+          normalizeAgentPlan(state.plan),
+          salonClock,
+        ),
+      }),
+    )
+    .addNode(
+      "respond",
+      async (state) => {
+        const plan = normalizeAgentPlan(state.plan);
+        const actionResult = state.actionResult as AgentActionResult | undefined;
+
+        const actionContext = actionResult
+          ? `\n\nAGENT ACTION RESULT:\n${JSON.stringify(actionResult)}\n\nIMPORTANT: If performed=true, clearly tell the customer the action was completed. If status=needs_input, ask only the FIRST missing field. If status=blocked, explain the customer-facing reason and offer the best next step. Never claim an action happened unless performed=true.`
+          : "\n\nAGENT ACTION RESULT:\nNo database write action was required for this request.";
+
+        const messages = [
+          {
+            role: "system",
+            content: FAITHI_SYSTEM_PROMPT,
+          },
+          {
+            role: "system",
+            content: liveSalonContext + actionContext,
+          },
+          ...history,
+          {
+            role: "user",
+            content: customerMessage,
+          },
+        ];
+
+        try {
+          const response = await model.invoke(messages as any);
+          const reply = removeThinking(
+            textFromLangChainContent(response.content),
+          );
+
+          if (!reply) {
+            throw new Error("LangChain returned an empty Faithi response.");
+          }
+
+          return {
+            reply,
+            plan,
+            actionResult,
+          };
+        } catch (responseError) {
+          console.error("AGENT RESPONSE ERROR:", responseError);
+
+          // Important: a write action may already have completed. Never lose
+          // that fact just because the final natural-language generation failed.
+          if (actionResult) {
+            return {
+              reply: actionResult.message,
+              plan,
+              actionResult,
+            };
+          }
+
+          throw responseError;
+        }
+      },
+      { retryPolicy: { maxAttempts: 2 } },
+    )
+    .addEdge(START, "plan")
+    .addEdge("plan", "execute")
+    .addEdge("execute", "respond")
+    .addEdge("respond", END)
+    .compile();
+
+  const result = await workflow.invoke({
+    customerMessage,
+  });
+
+  return {
+    reply: cleanString(result.reply),
+    plan: normalizeAgentPlan(result.plan),
+    actionResult: result.actionResult as AgentActionResult | undefined,
+  };
+}
+
+
+// ============================================================
 // SERVICE MATCHING
 // ============================================================
 
@@ -1221,7 +2709,11 @@ Deno.serve(async (req) => {
       typeof body.customer_preferences ===
         "object"
         ? body.customer_preferences
-        : {};
+        : body.context?.customer_preferences &&
+            typeof body.context.customer_preferences ===
+              "object"
+          ? body.context.customer_preferences
+          : {};
 
     // ========================================================
     // LOAD LIVE SALON SERVICES
@@ -1314,12 +2806,7 @@ Deno.serve(async (req) => {
 
     try {
       const today =
-        new Date()
-          .toISOString()
-          .substring(
-            0,
-            10,
-          );
+        salonClock.isoDate;
 
       const {
         data,
@@ -1464,6 +2951,24 @@ Deno.serve(async (req) => {
       (item) => item.date === salonClock.isoDate,
     );
 
+    // Customer-facing AI receives schedule details without customer identity.
+    // Verified customer-specific booking lookup is handled by the agent actions.
+    const publicAppointments = appointments.map((item) => ({
+      source_table: item.source_table,
+      id: item.id,
+      date: item.date,
+      time: item.time,
+      service: item.service,
+      status: item.status,
+      braid_size: item.braid_size,
+      braid_length: item.braid_length,
+      color: item.color,
+    }));
+
+    const publicTodayAppointments = publicAppointments.filter(
+      (item) => item.date === salonClock.isoDate,
+    );
+
     // ========================================================
     // LIVE CONTEXT FOR QWEN
     // ========================================================
@@ -1484,13 +2989,13 @@ ${JSON.stringify(
 TODAY'S APPOINTMENTS:
 
 ${JSON.stringify(
-  todayAppointments,
+  publicTodayAppointments,
 )}
 
 CURRENT/FUTURE APPOINTMENTS:
 
 ${JSON.stringify(
-  appointments,
+  publicAppointments,
 )}
 
 APPOINTMENT TABLES FOUND:
@@ -1552,125 +3057,165 @@ If information is unavailable, tell the customer it needs confirmation.
 `;
 
     // ========================================================
-    // MESSAGES
+    // LANGCHAIN + LANGGRAPH AGENT
     // ========================================================
 
-    const messages = [
-      {
-        role: "system",
-        content:
-          FAITHI_SYSTEM_PROMPT,
-      },
+    let reply = "";
+    let agentPlan: AgentPlan = {
+      action: "conversation",
+    };
+    let agentActionResult: AgentActionResult | undefined;
+    let agentEngine = "langgraph";
 
-      {
-        role: "system",
-        content:
-          liveSalonContext,
-      },
-
-      ...history,
-
-      {
-        role: "user",
-        content:
-          customerMessage,
-      },
-    ];
-
-    // ========================================================
-    // HUGGING FACE / QWEN
-    // ========================================================
-
-    const hfResponse =
-      await fetch(
-        HF_ENDPOINT,
-        {
-          method: "POST",
-
-          headers: {
-            Authorization:
-              `Bearer ${HF_TOKEN}`,
-
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            model: MODEL,
-
-            messages,
-
-            temperature: 0.3,
-
-            max_tokens: 400,
-
-            stream: false,
-          }),
+    try {
+      const langChainModel = new ChatOpenAI({
+        model: MODEL,
+        apiKey: HF_TOKEN,
+        temperature: 0.3,
+        maxRetries: 1,
+        configuration: {
+          baseURL: HF_BASE_URL,
         },
+      });
+
+      const agentResult = await runFaithiLangGraphAgent({
+        supabase,
+        model: langChainModel,
+        customerMessage,
+        history,
+        customerPreferences,
+        salonClock,
+        services,
+        availability,
+        liveSalonContext,
+      });
+
+      reply = removeThinking(
+        cleanString(agentResult.reply),
       );
 
-    // ========================================================
-    // HF ERROR
-    // ========================================================
-
-    if (!hfResponse.ok) {
-      const errorText =
-        await hfResponse.text();
-
+      agentPlan = agentResult.plan;
+      agentActionResult = agentResult.actionResult;
+    } catch (agentError) {
       console.error(
-        "Hugging Face error:",
-        hfResponse.status,
-        errorText,
+        "LANGGRAPH AGENT ERROR — USING LEGACY FALLBACK:",
+        agentError,
       );
 
-      return new Response(
-        JSON.stringify({
-          reply:
-            "I'm having trouble connecting right now. Please try again in a moment.",
-
-          dataframe: {
-            rows: [],
-          },
-
-          meta: {
-            error: true,
-            intent:
-              detectIntent(
-                customerMessage,
-              ),
-          },
-        }),
-        {
-          status: 502,
-
-          headers: {
-            ...corsHeaders,
-            "Content-Type":
-              "application/json",
-          },
-        },
-      );
+      agentEngine = "legacy_fallback";
     }
 
     // ========================================================
-    // PARSE QWEN RESPONSE
+    // LEGACY HUGGING FACE FALLBACK
+    // Preserves the original behavior if LangChain/LangGraph
+    // is temporarily unavailable.
     // ========================================================
 
-    const hfData =
-      await hfResponse.json();
+    if (!reply) {
+      const messages = [
+        {
+          role: "system",
+          content:
+            FAITHI_SYSTEM_PROMPT,
+        },
 
-    let reply =
-      cleanString(
-        hfData?.choices?.[0]
-          ?.message?.content,
-      );
+        {
+          role: "system",
+          content:
+            liveSalonContext,
+        },
 
-    reply =
-      removeThinking(reply);
+        ...history,
+
+        {
+          role: "user",
+          content:
+            customerMessage,
+        },
+      ];
+
+      const hfResponse =
+        await fetch(
+          HF_ENDPOINT,
+          {
+            method: "POST",
+
+            headers: {
+              Authorization:
+                `Bearer ${HF_TOKEN}`,
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              model: MODEL,
+
+              messages,
+
+              temperature: 0.3,
+
+              max_tokens: 400,
+
+              stream: false,
+            }),
+          },
+        );
+
+      if (!hfResponse.ok) {
+        const errorText =
+          await hfResponse.text();
+
+        console.error(
+          "Hugging Face error:",
+          hfResponse.status,
+          errorText,
+        );
+
+        return new Response(
+          JSON.stringify({
+            reply:
+              "I'm having trouble connecting right now. Please try again in a moment.",
+
+            dataframe: {
+              rows: [],
+            },
+
+            meta: {
+              error: true,
+              intent:
+                detectIntent(
+                  customerMessage,
+                ),
+            },
+          }),
+          {
+            status: 502,
+
+            headers: {
+              ...corsHeaders,
+              "Content-Type":
+                "application/json",
+            },
+          },
+        );
+      }
+
+      const hfData =
+        await hfResponse.json();
+
+      reply =
+        removeThinking(
+          cleanString(
+            hfData?.choices?.[0]
+              ?.message?.content,
+          ),
+        );
+    }
 
     if (!reply) {
       throw new Error(
-        "Qwen returned an empty response.",
+        "Faithi returned an empty response.",
       );
     }
 
@@ -1691,6 +3236,15 @@ If information is unavailable, tell the customer it needs confirmation.
     let structuredRows: any[] = [];
 
     if (
+      agentActionResult?.rows &&
+      agentActionResult.rows.length > 0
+    ) {
+      structuredRows =
+        agentActionResult.rows;
+    }
+
+    if (
+      structuredRows.length === 0 &&
       serviceMatches.length > 0
     ) {
       if (
@@ -1749,8 +3303,7 @@ If information is unavailable, tell the customer it needs confirmation.
           time: item.time,
           service: item.service,
           status: item.status,
-          // Do not expose customer contact information here.
-          customer_name: item.customer_name,
+          // Privacy-safe general schedule row. Customer identity is intentionally omitted.
           braid_size: item.braid_size,
           braid_length: item.braid_length,
           color: item.color,
@@ -1784,6 +3337,29 @@ If information is unavailable, tell the customer it needs confirmation.
             detectIntent(
               customerMessage,
             ),
+
+          agent: {
+            framework:
+              "langchain+langgraph",
+
+            engine:
+              agentEngine,
+
+            planned_action:
+              agentPlan.action,
+
+            performed:
+              agentActionResult?.performed ?? false,
+
+            action_status:
+              agentActionResult?.status ?? "not_needed",
+
+            booking_id:
+              agentActionResult?.booking_id ?? null,
+
+            missing_fields:
+              agentActionResult?.missing_fields ?? [],
+          },
 
           salon_data: {
             services_loaded:
