@@ -431,7 +431,22 @@ When the customer is ready:
 
 STOP recommending alternatives.
 
-Confirm the important selections briefly. When the customer has clearly chosen to proceed and the required booking information is available, perform the booking directly through the agent action system instead of sending the customer to another page.
+For a new booking, collect and validate ALL of these required fields before creating the booking:
+
+- exact salon service
+- appointment date
+- appointment time
+- hair color
+- customer's full name
+- customer's 10-digit phone number
+- customer's valid email address
+
+Do not create a booking with a missing required field.
+Do not invent any field.
+Use information the customer already provided and do not ask for it again.
+The agent may summarize the booking-so-far while collecting the next missing field.
+
+Confirm the important selections briefly. When the customer has clearly chosen to proceed and all required booking information is available, perform the booking directly through the agent action system instead of sending the customer to another page.
 
 Example:
 
@@ -558,6 +573,32 @@ Customers may answer with only:
 Interpret these using the current conversation context.
 
 Do not restart the conversation.
+
+============================================================
+FOLLOW-UP EXPLANATIONS
+============================================================
+
+If the customer asks a short follow-up such as:
+
+- "why"
+- "why not"
+- "how come"
+- "what do you mean"
+- "explain that"
+- "why is that"
+
+use the immediately previous assistant statement and conversation context.
+
+Answer the REASON behind that statement.
+
+Do NOT simply repeat the previous answer.
+
+For availability explanations:
+- distinguish between a salon-closed day, configured slots that are unavailable,
+  booked appointments, and a date that has no availability slots configured
+- only state a reason that is supported by LIVE SALON DATA
+- if the data does not reveal the exact reason, say exactly what is known and
+  what is not known instead of guessing
 
 ============================================================
 YES
@@ -1078,6 +1119,458 @@ async function loadAppointmentRows(
   };
 }
 
+
+// ============================================================
+// FOLLOW-UP EXPLANATION HELPERS
+// ============================================================
+
+function getLastAssistantHistoryMessage(
+  history: Record<string, unknown>[],
+): string {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const row = history[i];
+    if (cleanString(row?.role).toLowerCase() === "assistant") {
+      const content = cleanString(row?.content);
+      if (content) return content;
+    }
+  }
+  return "";
+}
+
+function isWhyFollowUp(text: string): boolean {
+  const value = cleanString(text)
+    .toLowerCase()
+    .replace(/[?!.,]+$/g, "")
+    .trim();
+
+  return [
+    "why",
+    "why not",
+    "how come",
+    "what do you mean",
+    "explain",
+    "explain that",
+    "why is that",
+    "why is this",
+    "why cant i",
+    "why can't i",
+    "why cant i come",
+    "why can't i come",
+  ].includes(value);
+}
+
+function looksLikeAvailabilityStatement(text: string): boolean {
+  const lower = cleanString(text).toLowerCase();
+
+  return containsAny(lower, [
+    "opening",
+    "openings",
+    "available",
+    "availability",
+    "slot",
+    "slots",
+    "appointment",
+    "appointments",
+    "scheduled for",
+    "next available",
+    "no openings",
+    "don't have any openings",
+    "do not have any openings",
+  ]);
+}
+
+function monthNumberFromName(value: string): number {
+  const months: Record<string, number> = {
+    january: 1,
+    february: 2,
+    march: 3,
+    april: 4,
+    may: 5,
+    june: 6,
+    july: 7,
+    august: 8,
+    september: 9,
+    october: 10,
+    november: 11,
+    december: 12,
+  };
+
+  return months[value.toLowerCase()] ?? 0;
+}
+
+function extractReferencedIsoDate(
+  text: string,
+  salonClock: ReturnType<typeof getSalonClock>,
+): string {
+  const raw = cleanString(text);
+  if (!raw) return "";
+
+  const exact = raw.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (exact) return exact[1];
+
+  const monthMatch = raw.match(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,\s*(\d{4}))?\b/i,
+  );
+
+  if (monthMatch) {
+    const month = monthNumberFromName(monthMatch[1]);
+    const day = Number(monthMatch[2]);
+    const salonYear = Number(salonClock.isoDate.slice(0, 4));
+    let year = Number(monthMatch[3] ?? salonYear);
+
+    if (
+      month >= 1 && month <= 12 &&
+      day >= 1 && day <= 31 &&
+      Number.isFinite(year)
+    ) {
+      let candidate =
+        `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+      // If the customer/assistant omitted the year and that calendar date is
+      // already far in the past, interpret it as the next occurrence.
+      if (!monthMatch[3] && candidate < salonClock.isoDate) {
+        year += 1;
+        candidate =
+          `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+
+      return candidate;
+    }
+  }
+
+  const weekdayMatch = raw.match(
+    /\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i,
+  );
+
+  if (weekdayMatch) {
+    return resolveDateExpression(
+      weekdayMatch[1],
+      salonClock,
+    );
+  }
+
+  return "";
+}
+
+function displaySalonDate(
+  isoDate: string,
+  timeZone: string,
+): string {
+  const parsed = new Date(`${isoDate}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(parsed);
+}
+
+function weekdayNameForIsoDate(isoDate: string): string {
+  const parsed = new Date(`${isoDate}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+  }).format(parsed);
+}
+
+function salonHoursRowForWeekday(
+  salonHours: Record<string, unknown>[],
+  weekday: string,
+): Record<string, unknown> | null {
+  const wanted = cleanString(weekday).toLowerCase();
+
+  for (const row of salonHours) {
+    const rawDay = cleanString(
+      pickFirst(row, [
+        "day_of_week",
+        "weekday",
+        "day",
+        "day_name",
+        "name",
+      ]),
+    ).toLowerCase();
+
+    if (!rawDay) continue;
+
+    if (
+      rawDay === wanted ||
+      rawDay.startsWith(wanted.slice(0, 3)) ||
+      wanted.startsWith(rawDay.slice(0, 3))
+    ) {
+      return row;
+    }
+  }
+
+  return null;
+}
+
+function salonHoursRowExplicitlyClosed(
+  row: Record<string, unknown> | null,
+): boolean {
+  if (!row) return false;
+
+  if (row.is_open === false) return true;
+  if (row.open === false) return true;
+  if (row.is_closed === true) return true;
+  if (row.closed === true) return true;
+
+  const status = cleanString(
+    pickFirst(row, ["status", "availability_status"]),
+  ).toLowerCase();
+
+  return ["closed", "off", "unavailable"].includes(status);
+}
+
+function nextOpenAvailabilityLabel(
+  availability: Record<string, unknown>[],
+  afterDate: string,
+  timeZone: string,
+): string {
+  const sorted = [...availability]
+    .filter((row) => {
+      const date = normalizeDateOnly(
+        pickFirst(row, ["slot_date", "date", "booking_date"]),
+      );
+
+      return date && date > afterDate && row.is_available !== false;
+    })
+    .sort((a, b) => {
+      const left =
+        `${normalizeDateOnly(pickFirst(a, ["slot_date", "date", "booking_date"]))} ${normalizeDbTime(pickFirst(a, ["start_time", "time", "slot_time"]))}`;
+      const right =
+        `${normalizeDateOnly(pickFirst(b, ["slot_date", "date", "booking_date"]))} ${normalizeDbTime(pickFirst(b, ["start_time", "time", "slot_time"]))}`;
+      return left.localeCompare(right);
+    });
+
+  const first = sorted[0];
+  if (!first) return "";
+
+  const date = normalizeDateOnly(
+    pickFirst(first, ["slot_date", "date", "booking_date"]),
+  );
+  const time = normalizeDbTime(
+    pickFirst(first, ["start_time", "time", "slot_time"]),
+  );
+
+  if (!date) return "";
+
+  const dateLabel = displaySalonDate(date, timeZone);
+  return time
+    ? `${dateLabel} at ${displayDbTime(time)}`
+    : dateLabel;
+}
+
+async function buildAvailabilityWhyReply({
+  supabase,
+  customerMessage,
+  history,
+  salonClock,
+  salonHours,
+  appointments,
+  availability,
+}: {
+  supabase: any;
+  customerMessage: string;
+  history: Record<string, unknown>[];
+  salonClock: ReturnType<typeof getSalonClock>;
+  salonHours: Record<string, unknown>[];
+  appointments: Record<string, unknown>[];
+  availability: Record<string, unknown>[];
+}): Promise<string | null> {
+  if (!isWhyFollowUp(customerMessage)) return null;
+
+  const previousAssistant =
+    getLastAssistantHistoryMessage(history);
+
+  if (
+    !previousAssistant ||
+    !looksLikeAvailabilityStatement(previousAssistant)
+  ) {
+    return null;
+  }
+
+  let targetDate =
+    extractReferencedIsoDate(previousAssistant, salonClock);
+
+  // If the assistant message did not include a parsable date, also inspect the
+  // most recent user messages because the requested date is often there.
+  if (!targetDate) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      const row = history[i];
+      if (cleanString(row?.role).toLowerCase() !== "user") continue;
+      targetDate = extractReferencedIsoDate(
+        cleanString(row?.content),
+        salonClock,
+      );
+      if (targetDate) break;
+    }
+  }
+
+  if (!targetDate) {
+    return (
+      "I was referring to the live appointment schedule. " +
+      "I can explain the exact reason once I can identify the date we were discussing."
+    );
+  }
+
+  const dateLabel =
+    displaySalonDate(targetDate, salonClock.timeZone);
+  const weekday =
+    weekdayNameForIsoDate(targetDate);
+
+  const hoursRow =
+    salonHoursRowForWeekday(salonHours, weekday);
+
+  if (salonHoursRowExplicitlyClosed(hoursRow)) {
+    const next =
+      nextOpenAvailabilityLabel(
+        availability,
+        targetDate,
+        salonClock.timeZone,
+      );
+
+    return next
+      ? `${dateLabel} is unavailable because the salon schedule marks ${weekday} as closed. The next listed opening I can see is ${next}.`
+      : `${dateLabel} is unavailable because the salon schedule marks ${weekday} as closed.`;
+  }
+
+  let allSlots: Record<string, unknown>[] = [];
+  let slotsTableReadable = true;
+
+  try {
+    const { data, error } = await supabase
+      .from("availability_slots")
+      .select("*")
+      .eq("slot_date", targetDate)
+      .order("start_time", { ascending: true })
+      .limit(200);
+
+    if (error) {
+      slotsTableReadable = false;
+    } else if (Array.isArray(data)) {
+      allSlots = data;
+    }
+  } catch (_) {
+    slotsTableReadable = false;
+  }
+
+  const openSlots = allSlots.filter(
+    (row) => row.is_available === true,
+  );
+
+  if (openSlots.length > 0) {
+    const times = openSlots
+      .map((row) =>
+        displayDbTime(
+          pickFirst(row, ["start_time", "time", "slot_time"]),
+        )
+      )
+      .filter(Boolean)
+      .slice(0, 3);
+
+    const listed = times.length > 0
+      ? ` at ${times.join(", ")}`
+      : "";
+
+    return (
+      `I checked again, and ${dateLabel} actually has ${openSlots.length} open ` +
+      `slot${openSlots.length === 1 ? "" : "s"}${listed}. ` +
+      "My previous message was incorrect."
+    );
+  }
+
+  const dateAppointments = appointments.filter((item) => {
+    const date = normalizeDateOnly(
+      pickFirst(item, [
+        "date",
+        "booking_date",
+        "appointment_date",
+        "preferred_date",
+      ]),
+    );
+
+    if (date !== targetDate) return false;
+
+    const status = cleanString(
+      pickFirst(item, ["status", "booking_status", "appointment_status"]),
+    ).toLowerCase();
+
+    return !["cancelled", "canceled", "declined"].includes(status);
+  });
+
+  if (allSlots.length > 0 && openSlots.length === 0) {
+    const next =
+      nextOpenAvailabilityLabel(
+        availability,
+        targetDate,
+        salonClock.timeZone,
+      );
+
+    const bookedPart = dateAppointments.length > 0
+      ? ` I can also see ${dateAppointments.length} active appointment${dateAppointments.length === 1 ? "" : "s"} scheduled that day.`
+      : "";
+
+    const nextPart = next
+      ? ` The next listed opening is ${next}.`
+      : "";
+
+    return (
+      `Because every configured appointment slot for ${dateLabel} is currently marked unavailable.` +
+      bookedPart +
+      nextPart
+    );
+  }
+
+  if (dateAppointments.length > 0) {
+    const next =
+      nextOpenAvailabilityLabel(
+        availability,
+        targetDate,
+        salonClock.timeZone,
+      );
+
+    const nextPart = next
+      ? ` The next listed opening is ${next}.`
+      : "";
+
+    return (
+      `I can see ${dateAppointments.length} active appointment${dateAppointments.length === 1 ? "" : "s"} on ${dateLabel}, ` +
+      "but there are no open availability slots listed for that date. " +
+      "The live data does not show whether the rest of the day is intentionally blocked or simply not opened for booking yet." +
+      nextPart
+    );
+  }
+
+  if (slotsTableReadable) {
+    const next =
+      nextOpenAvailabilityLabel(
+        availability,
+        targetDate,
+        salonClock.timeZone,
+      );
+
+    const nextPart = next
+      ? ` The next listed opening is ${next}.`
+      : "";
+
+    return (
+      `There are no availability slots configured for ${dateLabel} in the live schedule. ` +
+      "That is why I could not offer that date. The current data does not tell me whether the salon is closed that day or the schedule has not been opened yet." +
+      nextPart
+    );
+  }
+
+  return (
+    `I could not verify the exact reason ${dateLabel} has no opening from the live schedule. ` +
+    "I should not guess."
+  );
+}
+
 // ============================================================
 // LANGCHAIN + LANGGRAPH AGENT HELPERS
 // ============================================================
@@ -1342,6 +1835,537 @@ function normalizeAgentPlan(value: unknown): AgentPlan {
 
   return plan;
 }
+
+// ============================================================
+// DETERMINISTIC BOOKING COLLECTION
+// ============================================================
+
+const REQUIRED_BOOKING_FIELDS = [
+  "service",
+  "appointment date",
+  "appointment time",
+  "hair color",
+  "full name",
+  "phone number",
+  "email address",
+] as const;
+
+function isValidEmail(value: unknown): boolean {
+  const email = normalizeEmail(value);
+  if (!email) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+}
+
+function isExplicitCreateBookingIntent(text: string): boolean {
+  const lower = cleanString(text).toLowerCase();
+  if (!lower) return false;
+
+  // These are other booking operations, not a new booking.
+  if (
+    containsAny(lower, [
+      "cancel",
+      "reschedule",
+      "move my appointment",
+      "change my appointment",
+      "change my booking",
+      "booking status",
+      "status of my booking",
+      "find my booking",
+      "check my booking",
+    ])
+  ) {
+    return false;
+  }
+
+  return (
+    /\b(book|reserve)\b/i.test(lower) ||
+    /\bschedule\s+(?:me|an appointment|a booking|my appointment)\b/i.test(lower) ||
+    /\b(make|set up)\s+(?:an?\s+)?appointment\b/i.test(lower) ||
+    containsAny(lower, [
+      "book it",
+      "book that",
+      "book this",
+      "i want to book",
+      "i would like to book",
+      "i'd like to book",
+      "i am ready to book",
+      "i'm ready to book",
+      "confirm my booking",
+      "submit my booking",
+    ])
+  );
+}
+
+function assistantLooksLikeBookingCollection(text: string): boolean {
+  const lower = cleanString(text).toLowerCase();
+  if (!lower) return false;
+
+  return (
+    lower.includes("booking so far") ||
+    lower.includes("which hairstyle") ||
+    lower.includes("which service") ||
+    lower.includes("what date would you like") ||
+    lower.includes("which date would you like") ||
+    lower.includes("what time would you like") ||
+    lower.includes("which time would you like") ||
+    lower.includes("what is your full name") ||
+    lower.includes("what's your full name") ||
+    lower.includes("what phone number") ||
+    lower.includes("which phone number") ||
+    lower.includes("what email address") ||
+    lower.includes("which email address") ||
+    lower.includes("which hair color") ||
+    lower.includes("what hair color")
+  );
+}
+
+function lastAssistantMessage(history: Record<string, unknown>[]): string {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (cleanString(history[i]?.role).toLowerCase() === "assistant") {
+      return cleanString(history[i]?.content);
+    }
+  }
+  return "";
+}
+
+function isOngoingCreateBookingFlow(history: Record<string, unknown>[]): boolean {
+  const lastAssistant = lastAssistantMessage(history);
+  if (assistantLooksLikeBookingCollection(lastAssistant)) return true;
+
+  // If a recent user explicitly started a booking and no later user message
+  // clearly switched to cancel/reschedule/status, keep collecting the draft.
+  const recentUserMessages = history
+    .filter((item) => cleanString(item?.role).toLowerCase() === "user")
+    .map((item) => cleanString(item?.content))
+    .filter(Boolean)
+    .slice(-6);
+
+  let active = false;
+  for (const text of recentUserMessages) {
+    const lower = text.toLowerCase();
+    if (
+      containsAny(lower, [
+        "cancel",
+        "reschedule",
+        "move my appointment",
+        "change my booking",
+        "booking status",
+        "check my booking",
+      ])
+    ) {
+      active = false;
+      continue;
+    }
+    if (isExplicitCreateBookingIntent(text)) active = true;
+  }
+  return active && assistantLooksLikeBookingCollection(lastAssistant);
+}
+
+function extractEmailFromText(text: string): string {
+  const match = cleanString(text).match(
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
+  );
+  return match ? normalizeEmail(match[0]) : "";
+}
+
+function extractPhoneFromText(text: string): string {
+  const raw = cleanString(text);
+  const candidates = raw.match(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g) ?? [];
+  for (const candidate of candidates) {
+    const normalized = normalizePhone(candidate);
+    if (normalized.length === 10) return normalized;
+  }
+  return "";
+}
+
+function extractTimeFromText(text: string): string {
+  const raw = cleanString(text);
+  if (!raw) return "";
+
+  const twelveHour = raw.match(/\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM)\b/i);
+  if (twelveHour) {
+    return normalizeDbTime(twelveHour[0]);
+  }
+
+  const twentyFourHour = raw.match(/\b(\d{1,2}):([0-5]\d)(?::([0-5]\d))?\b/);
+  if (twentyFourHour) {
+    const hour = Number(twentyFourHour[1]);
+    // Without AM/PM, only accept an unambiguous 24-hour time.
+    // "8:30" or "10:00" will be clarified instead of guessed.
+    if (hour === 0 || hour >= 13) {
+      return normalizeDbTime(twentyFourHour[0]);
+    }
+  }
+
+  return "";
+}
+
+function extractDateFromText(
+  text: string,
+  salonClock: ReturnType<typeof getSalonClock>,
+): string {
+  const raw = cleanString(text);
+  if (!raw) return "";
+
+  const iso = raw.match(/\b\d{4}-\d{2}-\d{2}\b/);
+  if (iso) return resolveDateExpression(iso[0], salonClock);
+
+  const relative = raw.match(
+    /\b(?:today|tomorrow|(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i,
+  );
+  if (relative) return resolveDateExpression(relative[0], salonClock);
+
+  const monthDate = raw.match(
+    /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?\b/i,
+  );
+  if (monthDate) {
+    let candidate = monthDate[0].replace(/(st|nd|rd|th)\b/gi, "");
+    if (!/\b\d{4}\b/.test(candidate)) {
+      candidate = `${candidate}, ${salonClock.isoDate.slice(0, 4)}`;
+      let resolved = resolveDateExpression(candidate, salonClock);
+      if (resolved && resolved < salonClock.isoDate) {
+        const nextYear = String(Number(salonClock.isoDate.slice(0, 4)) + 1);
+        candidate = candidate.replace(/\d{4}\s*$/, nextYear);
+        resolved = resolveDateExpression(candidate, salonClock);
+      }
+      return resolved;
+    }
+    return resolveDateExpression(candidate, salonClock);
+  }
+
+  const numeric = raw.match(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/);
+  if (numeric) return resolveDateExpression(numeric[0], salonClock);
+
+  return "";
+}
+
+function extractNameFromText(text: string, promptedForName = false): string {
+  const raw = cleanString(text);
+  if (!raw) return "";
+
+  const explicit = raw.match(
+    /\b(?:my\s+name\s+is|name\s+is|this\s+is)\s+([A-Za-z][A-Za-z' -]{1,79})\s*$/i,
+  );
+  if (explicit) return cleanString(explicit[1]);
+
+  if (!promptedForName) return "";
+  if (extractEmailFromText(raw) || extractPhoneFromText(raw)) return "";
+  if (/\d/.test(raw)) return "";
+  if (!/^[A-Za-z][A-Za-z' -]{1,79}$/.test(raw)) return "";
+
+  const lower = raw.toLowerCase();
+  if (
+    [
+      "yes",
+      "no",
+      "okay",
+      "ok",
+      "sure",
+      "book it",
+      "ready",
+      "medium",
+      "small",
+      "large",
+      "jumbo",
+    ].includes(lower)
+  ) {
+    return "";
+  }
+
+  return raw;
+}
+
+function findColorCodeFromText(
+  text: string,
+  hairColors: Record<string, unknown>[],
+): string {
+  const lower = cleanString(text).toLowerCase();
+  if (!lower) return "";
+
+  // Prefer exact code matches, then full color-name matches.
+  const sorted = [...hairColors].sort(
+    (a, b) => cleanString(b.code).length - cleanString(a.code).length,
+  );
+
+  for (const color of sorted) {
+    const code = cleanString(color.code);
+    if (!code) continue;
+    const pattern = new RegExp(
+      `(^|[^a-z0-9])${code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").toLowerCase()}([^a-z0-9]|$)`,
+      "i",
+    );
+    if (pattern.test(lower)) return code;
+  }
+
+  for (const color of hairColors) {
+    const name = cleanString(color.name);
+    if (name && lower.includes(name.toLowerCase())) {
+      return cleanString(color.code);
+    }
+  }
+
+  return "";
+}
+
+function findUniqueServiceFromText(
+  text: string,
+  services: Record<string, unknown>[],
+): Record<string, unknown> | null {
+  const lower = cleanString(text).toLowerCase();
+  if (!lower) return null;
+
+  // Exact/full-name mentions are strongest. Longest wins.
+  const fullMatches = services
+    .filter((service) => {
+      const name = cleanString(service.name).toLowerCase();
+      return name && lower.includes(name);
+    })
+    .sort(
+      (a, b) => cleanString(b.name).length - cleanString(a.name).length,
+    );
+
+  if (fullMatches.length > 0) return fullMatches[0];
+
+  const matched = findMatchingServices(lower, services);
+  if (matched.length === 1) return matched[0];
+  return null;
+}
+
+function parseBookingSummaryFromAssistantHistory(
+  history: Record<string, unknown>[],
+): AgentPlan {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (cleanString(history[i]?.role).toLowerCase() !== "assistant") continue;
+    const text = cleanString(history[i]?.content);
+    if (!text.toLowerCase().includes("booking so far")) continue;
+
+    const plan: AgentPlan = { action: "create_booking" };
+    const service = text.match(/Service:\s*([^;\n]+?)(?=;|\.?(?:\n|$))/i)?.[1];
+    const date = text.match(/Date:\s*([^;\n]+?)(?=;|\.?(?:\n|$))/i)?.[1];
+    const time = text.match(/Time:\s*([^;\n]+?)(?=;|\.?(?:\n|$))/i)?.[1];
+    const color = text.match(/Color:\s*([^;\n]+?)(?=;|\.?(?:\n|$))/i)?.[1];
+    const name = text.match(/Name:\s*([^;\n]+?)(?=;|\.?(?:\n|$))/i)?.[1];
+
+    if (service && cleanString(service).toLowerCase() !== "not selected") {
+      plan.service_name = cleanString(service);
+    }
+    if (date && cleanString(date).toLowerCase() !== "not selected") {
+      plan.booking_date = cleanString(date);
+    }
+    if (time && cleanString(time).toLowerCase() !== "not selected") {
+      plan.start_time = cleanString(time);
+    }
+    if (color && cleanString(color).toLowerCase() !== "not selected") {
+      plan.hair_color_code = cleanString(color);
+    }
+    if (name && cleanString(name).toLowerCase() !== "not provided") {
+      plan.customer_name = cleanString(name);
+    }
+
+    return plan;
+  }
+
+  return { action: "create_booking" };
+}
+
+function previousAssistantForIndex(
+  history: Record<string, unknown>[],
+  index: number,
+): string {
+  for (let i = index - 1; i >= 0; i--) {
+    if (cleanString(history[i]?.role).toLowerCase() === "assistant") {
+      return cleanString(history[i]?.content);
+    }
+  }
+  return "";
+}
+
+function buildDeterministicCreateBookingPlan({
+  customerMessage,
+  history,
+  customerPreferences,
+  salonClock,
+  services,
+  hairColors,
+}: {
+  customerMessage: string;
+  history: Record<string, unknown>[];
+  customerPreferences: Record<string, unknown>;
+  salonClock: ReturnType<typeof getSalonClock>;
+  services: Record<string, unknown>[];
+  hairColors: Record<string, unknown>[];
+}): AgentPlan | null {
+  const explicitIntent = isExplicitCreateBookingIntent(customerMessage);
+  const activeFlow = isOngoingCreateBookingFlow(history);
+
+  const lastAssistant = lastAssistantMessage(history);
+  const affirmativeAfterBookingOffer =
+    /^(yes|yeah|yep|sure|okay|ok|that works|do it|go ahead)$/i.test(customerMessage.trim()) &&
+    /\b(book|booking|appointment)\b/i.test(lastAssistant);
+
+  if (!explicitIntent && !activeFlow && !affirmativeAfterBookingOffer) {
+    return null;
+  }
+
+  const plan = parseBookingSummaryFromAssistantHistory(history);
+  plan.action = "create_booking";
+
+  const userEntries: Array<{ text: string; prompt: string }> = [];
+  for (let i = 0; i < history.length; i++) {
+    if (cleanString(history[i]?.role).toLowerCase() !== "user") continue;
+    userEntries.push({
+      text: cleanString(history[i]?.content),
+      prompt: previousAssistantForIndex(history, i),
+    });
+  }
+  userEntries.push({ text: customerMessage, prompt: lastAssistant });
+
+  const combinedUserText = userEntries.map((entry) => entry.text).join("\n");
+
+  // Service: customer text first. If the user says "book it", allow the
+  // immediately previous assistant recommendation to supply the selected service.
+  const serviceFromUser = findUniqueServiceFromText(combinedUserText, services);
+  if (serviceFromUser) {
+    plan.service_id = cleanString(serviceFromUser.id);
+    plan.service_name = cleanString(serviceFromUser.name);
+  } else if (!plan.service_name && /\b(book it|book that|book this|yes|that works)\b/i.test(customerMessage)) {
+    const serviceFromAssistant = findUniqueServiceFromText(lastAssistant, services);
+    if (serviceFromAssistant) {
+      plan.service_id = cleanString(serviceFromAssistant.id);
+      plan.service_name = cleanString(serviceFromAssistant.name);
+    }
+  }
+
+  for (const entry of userEntries) {
+    const promptLower = entry.prompt.toLowerCase();
+
+    const email = extractEmailFromText(entry.text);
+    if (email) plan.email = email;
+
+    const phone = extractPhoneFromText(entry.text);
+    if (phone) plan.phone = phone;
+
+    const date = extractDateFromText(entry.text, salonClock);
+    if (date) plan.booking_date = date;
+
+    const time = extractTimeFromText(entry.text);
+    if (time) plan.start_time = time;
+
+    const shortAnswer = entry.text.trim().toLowerCase();
+    const promptAsksColor =
+      promptLower.includes("hair color") ||
+      promptLower.includes("color code") ||
+      promptLower.includes("which color") ||
+      promptLower.includes("what color");
+    const textMentionsColor = /\bcolou?r\b/i.test(entry.text);
+    const exactColorAnswer = hairColors.some((row) => {
+      const code = cleanString(row.code).toLowerCase();
+      const name = cleanString(row.name).toLowerCase();
+      return shortAnswer === code || shortAnswer === name;
+    });
+
+    if (promptAsksColor || textMentionsColor || exactColorAnswer) {
+      const color = findColorCodeFromText(entry.text, hairColors);
+      if (color) plan.hair_color_code = color;
+    }
+
+    const name = extractNameFromText(
+      entry.text,
+      promptLower.includes("full name") ||
+        promptLower.includes("name for the booking") ||
+        promptLower.includes("what name"),
+    );
+    if (name) plan.customer_name = name;
+  }
+
+  // Reuse known safe preferences where they map directly to booking fields.
+  if (!plan.booking_date) {
+    const prefDate = cleanString(customerPreferences.datePreference ?? customerPreferences.date_preference);
+    const resolved = extractDateFromText(prefDate, salonClock);
+    if (resolved) plan.booking_date = resolved;
+  }
+
+  if (!plan.hair_color_code) {
+    const prefColor = cleanString(customerPreferences.color);
+    const color = findColorCodeFromText(prefColor, hairColors);
+    if (color) plan.hair_color_code = color;
+  }
+
+  return plan;
+}
+
+function bookingCollectedFields(plan: AgentPlan): string[] {
+  const fields: string[] = [];
+  if (cleanString(plan.service_id) || cleanString(plan.service_name)) fields.push("service");
+  if (cleanString(plan.booking_date)) fields.push("appointment date");
+  if (normalizeDbTime(plan.start_time)) fields.push("appointment time");
+  if (cleanString(plan.hair_color_code)) fields.push("hair color");
+  if (cleanString(plan.customer_name)) fields.push("full name");
+  if (normalizePhone(plan.phone).length === 10) fields.push("phone number");
+  if (isValidEmail(plan.email)) fields.push("email address");
+  return fields;
+}
+
+function bookingDraftSummary(plan: AgentPlan): string {
+  const parts: string[] = [];
+  if (cleanString(plan.service_name)) parts.push(`Service: ${cleanString(plan.service_name)}`);
+  if (cleanString(plan.booking_date)) parts.push(`Date: ${cleanString(plan.booking_date)}`);
+  if (normalizeDbTime(plan.start_time)) parts.push(`Time: ${displayDbTime(plan.start_time)}`);
+  if (cleanString(plan.hair_color_code)) parts.push(`Color: ${cleanString(plan.hair_color_code)}`);
+  if (cleanString(plan.customer_name)) parts.push(`Name: ${cleanString(plan.customer_name)}`);
+
+  return parts.length > 0 ? `Booking so far — ${parts.join("; ")}.` : "";
+}
+
+function questionForMissingBookingField(field: string): string {
+  switch (field) {
+    case "service":
+      return "Which hairstyle or service would you like to book?";
+    case "appointment date":
+      return "What date would you like for your appointment?";
+    case "appointment time":
+      return "What time would you like? Please include AM or PM.";
+    case "hair color":
+      return "Which hair color would you like? You can give me the color code, such as 1B.";
+    case "full name":
+      return "What is your full name for the booking?";
+    case "phone number":
+      return "What 10-digit phone number should I use for the booking?";
+    case "email address":
+      return "What email address should I use for the booking?";
+    default:
+      return `Please provide your ${field}.`;
+  }
+}
+
+function buildDeterministicBookingReply(
+  result: AgentActionResult,
+  plan: AgentPlan,
+): string {
+  if (result.status === "needs_input") {
+    const field = result.missing_fields?.[0] || "booking information";
+    const summary = bookingDraftSummary(plan);
+    const question = questionForMissingBookingField(field);
+    return summary ? `${summary}\n${question}` : question;
+  }
+
+  if (result.status === "completed") {
+    const row = result.rows?.[0] as Record<string, unknown> | undefined;
+    if (row) {
+      const service = cleanString(row.service_name || plan.service_name) || "your service";
+      const date = cleanString(row.booking_date || plan.booking_date);
+      const time = displayDbTime(row.start_time || plan.start_time);
+      const bookingId = cleanString(result.booking_id || row.id);
+      return `Your booking has been submitted for ${service} on ${date} at ${time}. ` +
+        `Your booking reference is ${bookingId}. The status is pending confirmation.`;
+    }
+    return result.message;
+  }
+
+  const summary = bookingDraftSummary(plan);
+  return summary ? `${summary}\n${result.message}` : result.message;
+}
+
 
 async function loadActiveServicesForAgent(supabase: any) {
   const { data, error } = await supabase
@@ -1658,13 +2682,17 @@ async function createBookingForAgent(
   const targetDate = resolveDateExpression(plan.booking_date, salonClock);
   const targetTime = normalizeDbTime(plan.start_time);
 
-  if (!customerName) missing.push("full name");
-  if (normalizePhone(phone).length < 10) missing.push("phone number");
+  // Match the required fields used by the existing Flutter BookingPage.
+  // Keep this order so Faithi asks for one useful missing field at a time.
   if (!cleanString(plan.service_id) && !cleanString(plan.service_name)) {
     missing.push("service");
   }
   if (!targetDate) missing.push("appointment date");
   if (!targetTime) missing.push("appointment time");
+  if (!cleanString(plan.hair_color_code)) missing.push("hair color");
+  if (!customerName) missing.push("full name");
+  if (normalizePhone(phone).length !== 10) missing.push("phone number");
+  if (!isValidEmail(plan.email)) missing.push("email address");
 
   if (missing.length > 0) {
     return {
@@ -1793,8 +2821,8 @@ async function createBookingForAgent(
 
   const payload = {
     customer_name: customerName,
-    phone,
-    email: cleanString(plan.email),
+    phone: normalizePhone(phone),
+    email: normalizeEmail(plan.email),
     service_id: service.id,
     booking_date: targetDate,
     start_time: targetTime,
@@ -2322,6 +3350,8 @@ Allowed action values:
 Choose conversation for normal questions, recommendations, prices, colors, pictures, hours, policies, preparation, or availability questions when no booking record should be changed.
 
 Choose create_booking only when the customer clearly wants Faithi to actually submit/create/book an appointment.
+For create_booking, all required fields are: exact service, appointment date, appointment time, hair color, full name, 10-digit phone number, and valid email address.
+Never claim a new booking is ready if one of those fields is missing.
 Choose find_booking when the customer wants to check an existing booking or booking status.
 Choose cancel_booking only when the customer clearly wants an existing booking cancelled.
 Choose reschedule_booking only when the customer clearly wants an existing booking moved to another date/time.
@@ -2329,6 +3359,10 @@ Choose update_booking when the customer wants an existing booking detail changed
 
 Never invent customer identity, phone, email, booking ID, service, date, time, color, or consent.
 Use the conversation history to understand short replies like "yes", "10", "Saturday", "1B", or "book it".
+If the customer says "why", "why not", "how come", "what do you mean", or "explain that",
+treat it as a follow-up to the immediately previous assistant statement. Choose conversation unless
+the customer is clearly requesting a database-changing action. The final response must explain the
+reason and must not merely repeat the prior answer.
 A prior assistant suggestion is NOT customer consent by itself.
 For relative dates, convert them using the current salon date when confident; otherwise leave the field empty.
 When a value is unknown, omit it from the JSON instead of guessing.
@@ -3067,8 +4101,56 @@ If information is unavailable, tell the customer it needs confirmation.
     let agentActionResult: AgentActionResult | undefined;
     let agentEngine = "langgraph";
 
-    try {
-      const langChainModel = new ChatOpenAI({
+    // Handle short explanatory follow-ups such as "why" deterministically
+    // when the previous statement was about appointment availability.
+    // This prevents Faithi from simply repeating the same availability answer.
+    const deterministicWhyReply =
+      await buildAvailabilityWhyReply({
+        supabase,
+        customerMessage,
+        history,
+        salonClock,
+        salonHours,
+        appointments,
+        availability,
+      });
+
+    if (deterministicWhyReply) {
+      reply = deterministicWhyReply;
+      agentEngine = "deterministic_followup";
+    }
+
+    // New-booking collection is intentionally deterministic. This prevents
+    // a model-planner failure from skipping required customer information.
+    // LangGraph/LangChain remain active for the rest of Faithi's agent flow.
+    if (!reply) {
+      const deterministicBookingPlan = buildDeterministicCreateBookingPlan({
+        customerMessage,
+        history,
+        customerPreferences,
+        salonClock,
+        services,
+        hairColors,
+      });
+
+      if (deterministicBookingPlan) {
+        agentPlan = deterministicBookingPlan;
+        agentActionResult = await executeAgentAction(
+          supabase,
+          agentPlan,
+          salonClock,
+        );
+        reply = buildDeterministicBookingReply(
+          agentActionResult,
+          agentPlan,
+        );
+        agentEngine = "deterministic_booking";
+      }
+    }
+
+    if (!reply) {
+      try {
+        const langChainModel = new ChatOpenAI({
         model: MODEL,
         apiKey: HF_TOKEN,
         temperature: 0.3,
@@ -3102,7 +4184,8 @@ If information is unavailable, tell the customer it needs confirmation.
         agentError,
       );
 
-      agentEngine = "legacy_fallback";
+        agentEngine = "legacy_fallback";
+      }
     }
 
     // ========================================================
@@ -3359,6 +4442,16 @@ If information is unavailable, tell the customer it needs confirmation.
 
             missing_fields:
               agentActionResult?.missing_fields ?? [],
+
+            required_booking_fields:
+              agentPlan.action === "create_booking"
+                ? [...REQUIRED_BOOKING_FIELDS]
+                : [],
+
+            collected_booking_fields:
+              agentPlan.action === "create_booking"
+                ? bookingCollectedFields(agentPlan)
+                : [],
           },
 
           salon_data: {
