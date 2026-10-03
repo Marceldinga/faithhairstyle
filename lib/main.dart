@@ -2431,7 +2431,9 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
 
     if (!mounted) return;
 
-    if (_explicitProceedBooking(text)) {
+    // If the Edge Function already created the booking, do not send the
+    // customer into the old booking form again.
+    if (_explicitProceedBooking(text) && !_controller.hasSubmittedBooking) {
       final draft = _controller.getBookingDraftService();
 
       if (draft != null) {
@@ -2442,6 +2444,15 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   }
 
   Future<void> _openBooking() async {
+    if (_controller.hasSubmittedBooking) {
+      final ref = _controller.shortBookingReference;
+      _controller.addSystemMessage(
+        'Your booking request is already saved and pending confirmation'
+        '${ref == null ? '.' : ' (reference: $ref).'}',
+      );
+      return;
+    }
+
     final service = _controller.getBookingDraftService();
 
     if (service == null) {
@@ -2502,7 +2513,9 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
                   },
                 ),
               ),
-              if (_controller.showBookingButton && !_controller.isLoading)
+              if (_controller.hasSubmittedBooking && !_controller.isLoading)
+                _buildBookingStatusBanner()
+              else if (_controller.showBookingButton && !_controller.isLoading)
                 _buildBookingButton(),
               if (_isListening) _buildListeningBanner(),
               _buildInputArea(),
@@ -2681,10 +2694,12 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
           ),
           const SizedBox(width: 7),
           _QuickChip(
-            label: 'Book',
+            label: _controller.hasSubmittedBooking ? 'New booking' : 'Book',
             icon: Icons.calendar_month_rounded,
             onTap: () => _sendMessage(
-              'I am ready to book the hairstyle we selected.',
+              _controller.hasSubmittedBooking
+                  ? 'I want to make a new booking.'
+                  : 'I am ready to book the hairstyle we selected.',
             ),
             isLoading: _controller.isLoading,
           ),
@@ -2717,6 +2732,58 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildBookingStatusBanner() {
+    final ref = _controller.shortBookingReference;
+    final status = _controller.bookingStatusLabel;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF4EE),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF9BC5A7)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_rounded,
+            color: Color(0xFF2E7D4F),
+            size: 21,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  status,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (ref != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Reference: $ref',
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -3284,6 +3351,36 @@ class FaithCopilotController extends ChangeNotifier {
   bool _showBookingButton = false;
   bool get showBookingButton => _showBookingButton;
 
+  // The full booking ID stays internal so future cancel/reschedule requests
+  // can use it. The customer-facing UI shows only a short reference.
+  String? _lastBookingId;
+  String _lastBookingStatus = '';
+
+  bool get hasSubmittedBooking =>
+      _lastBookingId != null &&
+      _lastBookingId!.isNotEmpty &&
+      _lastBookingStatus != 'cancelled' &&
+      _lastBookingStatus != 'canceled';
+
+  String? get shortBookingReference {
+    final id = _lastBookingId?.trim();
+    if (id == null || id.isEmpty) return null;
+    final compact = id.replaceAll('-', '');
+    final visible = compact.length <= 8 ? compact : compact.substring(0, 8);
+    return visible.toUpperCase();
+  }
+
+  String get bookingStatusLabel {
+    switch (_lastBookingStatus) {
+      case 'confirmed':
+        return 'BOOKING CONFIRMED';
+      case 'completed':
+        return 'BOOKING COMPLETED';
+      default:
+        return 'BOOKING SUBMITTED • PENDING CONFIRMATION';
+    }
+  }
+
   bool _voiceEnabled = true;
   bool get voiceEnabled => _voiceEnabled;
 
@@ -3332,6 +3429,10 @@ class FaithCopilotController extends ChangeNotifier {
       caseSensitive: false,
     ).firstMatch(value);
 
+    final isoDate = RegExp(
+      r'\b(\d{4})-(\d{2})-(\d{2})\b',
+    ).firstMatch(value);
+
     try {
       if (monthFirst != null) {
         final month = months[monthFirst.group(1)!.toLowerCase()]!;
@@ -3342,6 +3443,11 @@ class FaithCopilotController extends ChangeNotifier {
         final day = int.parse(dayFirst.group(1)!);
         final month = months[dayFirst.group(2)!.toLowerCase()]!;
         final year = int.parse(dayFirst.group(3)!);
+        preferredBookingDate = DateTime(year, month, day);
+      } else if (isoDate != null) {
+        final year = int.parse(isoDate.group(1)!);
+        final month = int.parse(isoDate.group(2)!);
+        final day = int.parse(isoDate.group(3)!);
         preferredBookingDate = DateTime(year, month, day);
       }
     } catch (_) {
@@ -3366,6 +3472,186 @@ class FaithCopilotController extends ChangeNotifier {
             '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00';
       }
     }
+  }
+
+  Map<String, dynamic> _agentMeta(Map<String, dynamic> meta) {
+    final raw = meta['agent'];
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return <String, dynamic>{};
+  }
+
+  bool _boolValue(dynamic value) {
+    if (value is bool) return value;
+    return value?.toString().toLowerCase() == 'true';
+  }
+
+  void _captureAgentBookingState(Map<String, dynamic> meta) {
+    final agent = _agentMeta(meta);
+    if (agent.isEmpty) return;
+
+    final action = (agent['planned_action'] ?? '').toString().toLowerCase();
+    final performed = _boolValue(agent['performed']);
+    final actionStatus =
+        (agent['action_status'] ?? '').toString().toLowerCase();
+    final bookingId = (agent['booking_id'] ?? '').toString().trim();
+
+    if (!performed || actionStatus != 'completed') return;
+
+    if (action == 'create_booking') {
+      if (bookingId.isNotEmpty) _lastBookingId = bookingId;
+      _lastBookingStatus = 'pending';
+      _showBookingButton = false;
+      return;
+    }
+
+    if (action == 'cancel_booking') {
+      if (bookingId.isNotEmpty) _lastBookingId = bookingId;
+      _lastBookingStatus = 'cancelled';
+      _showBookingButton = false;
+      return;
+    }
+
+    if (action == 'reschedule_booking' || action == 'update_booking') {
+      if (bookingId.isNotEmpty) _lastBookingId = bookingId;
+    }
+  }
+
+  bool _isSuccessfulAgentAction(
+    Map<String, dynamic> meta,
+    String expectedAction,
+  ) {
+    final agent = _agentMeta(meta);
+    return (agent['planned_action'] ?? '').toString().toLowerCase() ==
+            expectedAction.toLowerCase() &&
+        _boolValue(agent['performed']) &&
+        (agent['action_status'] ?? '').toString().toLowerCase() == 'completed';
+  }
+
+  String? _bookingIdFromMeta(Map<String, dynamic> meta) {
+    final agent = _agentMeta(meta);
+    final value = (agent['booking_id'] ?? '').toString().trim();
+    return value.isEmpty ? null : value;
+  }
+
+  String _shortReference(String value) {
+    final compact = value.replaceAll('-', '').trim();
+    if (compact.isEmpty) return '';
+    final visible = compact.length <= 8 ? compact : compact.substring(0, 8);
+    return visible.toUpperCase();
+  }
+
+  String _displayTime(String? dbTime) {
+    final value = (dbTime ?? '').trim();
+    final match = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(value);
+    if (match == null) return value;
+
+    var hour = int.tryParse(match.group(1) ?? '') ?? 0;
+    final minute = match.group(2) ?? '00';
+    final suffix = hour >= 12 ? 'PM' : 'AM';
+    hour %= 12;
+    if (hour == 0) hour = 12;
+    return '$hour:$minute $suffix';
+  }
+
+  String _bookingSubmittedReply(Map<String, dynamic> meta) {
+    final id = _bookingIdFromMeta(meta) ?? _lastBookingId;
+    final reference = id == null ? null : _shortReference(id);
+    final service = lastSuggestedServiceName?.trim();
+
+    final date = preferredBookingDate == null
+        ? null
+        : '${preferredBookingDate!.year.toString().padLeft(4, '0')}-'
+            '${preferredBookingDate!.month.toString().padLeft(2, '0')}-'
+            '${preferredBookingDate!.day.toString().padLeft(2, '0')}';
+    final time = preferredBookingStartTime == null
+        ? null
+        : _displayTime(preferredBookingStartTime);
+
+    final buffer = StringBuffer('Your booking request has been submitted');
+    if (service != null && service.isNotEmpty) buffer.write(' for $service');
+    if (date != null) buffer.write(' on $date');
+    if (time != null && time.isNotEmpty) buffer.write(' at $time');
+    buffer.write('.');
+    if (reference != null && reference.isNotEmpty) {
+      buffer.write(' Reference: $reference.');
+    }
+    buffer.write(' Status: pending confirmation.');
+    return buffer.toString();
+  }
+
+  String _customerFacingAgentReply(
+    String text,
+    Map<String, dynamic> meta,
+  ) {
+    if (_isSuccessfulAgentAction(meta, 'create_booking')) {
+      return _bookingSubmittedReply(meta);
+    }
+
+    var cleaned = text.trim();
+
+    // Show a short booking reference in chat while retaining the full UUID
+    // internally for future booking actions.
+    cleaned = cleaned.replaceAllMapped(
+      RegExp(
+        r'\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b',
+        caseSensitive: false,
+      ),
+      (match) => _shortReference(match.group(0) ?? ''),
+    );
+
+    // A pending booking must never be described as confirmed or "all set".
+    if (_lastBookingStatus == 'pending' &&
+        (cleaned.toLowerCase().contains('booking') ||
+            cleaned.toLowerCase().contains('appointment'))) {
+      cleaned = cleaned.replaceAll(
+        RegExp(r'\ball set\b', caseSensitive: false),
+        'saved and pending confirmation',
+      );
+      cleaned = cleaned.replaceAll(
+        RegExp(r'\bconfirmed\b', caseSensitive: false),
+        'pending confirmation',
+      );
+    }
+
+    return cleaned;
+  }
+
+  bool _isPostBookingCompliment(String text) {
+    if (!hasSubmittedBooking) return false;
+
+    final lower = text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    const exact = {
+      'you did great',
+      'great job',
+      'good job',
+      'well done',
+      'awesome',
+      'perfect',
+      'nice',
+      'nice job',
+      'thank you',
+      'thanks',
+      'thank you faithi',
+      'thanks faithi',
+      'i love it',
+      'love it',
+    };
+
+    return exact.contains(lower);
+  }
+
+  bool _asksForBookingReference(String text) {
+    if (!hasSubmittedBooking) return false;
+    final lower = text.toLowerCase();
+    return lower.contains('booking reference') ||
+        lower.contains('reference number') ||
+        lower.contains('booking id') ||
+        lower.contains('confirmation number');
   }
 
   bool _metaHasLiveAvailability(Map<String, dynamic> meta) {
@@ -3651,19 +3937,57 @@ class FaithCopilotController extends ChangeNotifier {
 
     _messages.add(ChatMessage(text: cleanText, isUser: true));
 
+    // Do not send simple compliments back through the model after a completed
+    // booking. A short, natural response avoids repeating the full booking.
+    if (_isPostBookingCompliment(cleanText)) {
+      const message =
+          'Thank you! 😊 Your booking request is saved and pending confirmation. '
+          'Let me know if you need anything else.';
+      _messages.add(const ChatMessage(text: message, isUser: false));
+      _showBookingButton = false;
+      notifyListeners();
+
+      if (_voiceEnabled) {
+        unawaited(_speak(message));
+      }
+      return;
+    }
+
+    if (_asksForBookingReference(cleanText)) {
+      final ref = shortBookingReference;
+      final message = ref == null
+          ? 'I do not have a booking reference in this chat yet.'
+          : 'Your booking reference is $ref. The status is pending confirmation.';
+      _messages.add(ChatMessage(text: message, isUser: false));
+      _showBookingButton = false;
+      notifyListeners();
+
+      if (_voiceEnabled) {
+        unawaited(_speak(message));
+      }
+      return;
+    }
+
     _isLoading = true;
     notifyListeners();
 
     try {
       final result = await _fetchAIResponseWithRetry(cleanText);
+
+      // Capture successful booking actions before formatting the reply.
+      _captureAgentBookingState(result.meta);
+
       final cleanedReply = _stripImageMarkupFromReply(
-        _sanitizeUnconfirmedBookingLanguage(
-          _removeRepeatedGreeting(result.reply),
-        ),
+        _removeRepeatedGreeting(result.reply),
+      );
+
+      final actionAwareReply = _customerFacingAgentReply(
+        cleanedReply,
+        result.meta,
       );
 
       final reply = _normalizeAvailabilityReply(
-        cleanedReply,
+        actionAwareReply,
         result.meta,
       );
 
@@ -3795,7 +4119,12 @@ class FaithCopilotController extends ChangeNotifier {
           body: {
             'message': customerMessage,
             'history': history,
-            'customer_preferences': preferences.toMap(),
+            'customer_preferences': {
+              ...preferences.toMap(),
+              if (_lastBookingId != null) 'current_booking_id': _lastBookingId,
+              if (_lastBookingStatus.isNotEmpty)
+                'current_booking_status': _lastBookingStatus,
+            },
           },
         )
         .timeout(
@@ -3927,30 +4256,6 @@ class FaithCopilotController extends ChangeNotifier {
     );
 
     return cleaned.trim();
-  }
-
-  String _sanitizeUnconfirmedBookingLanguage(String text) {
-    var cleaned = text.trim();
-
-    // Faithi chat can prepare booking details, but the appointment is not
-    // actually confirmed until the booking flow creates the booking record.
-    cleaned = cleaned.replaceAll(
-      RegExp(r'\bare confirmed for\b', caseSensitive: false),
-      'are selected for',
-    );
-    cleaned = cleaned.replaceAll(
-      RegExp(r'\bis confirmed for\b', caseSensitive: false),
-      'is selected for',
-    );
-    cleaned = cleaned.replaceAll(
-      RegExp(
-        r'\byour appointment (?:has been|is) confirmed\b',
-        caseSensitive: false,
-      ),
-      'your appointment details are ready',
-    );
-
-    return cleaned;
   }
 
   bool _looksLikeIncompleteReply(String text) {
@@ -4229,6 +4534,10 @@ class FaithCopilotController extends ChangeNotifier {
             intent == 'booking') &&
         getSuggestedService() != null) {
       _showBookingButton = true;
+    }
+
+    if (hasSubmittedBooking) {
+      _showBookingButton = false;
     }
   }
 
