@@ -37,6 +37,31 @@ const HF_ENDPOINT =
   `${HF_BASE_URL}/chat/completions`;
 
 // ============================================================
+// FAITH HAIR STYLE WEBSITE FACTS
+// ============================================================
+// These are public facts already shown by the Flutter website.
+// Supabase business_info remains the preferred source of truth.
+// These values are only used as a fallback when a matching field is not
+// present in business_info yet, so Faithi can still answer questions about
+// the salon's own homepage/app without pretending it cannot access it.
+const WEBSITE_FALLBACK_FACTS = {
+  business_name: "Faith Hair Style",
+  location: "Riverdale, Maryland",
+  phone: "+1 301-541-9875",
+  whatsapp: "+1 301-541-9875",
+  instagram_url: "https://www.instagram.com/faith_styl_/",
+  tiktok_url: "https://www.tiktok.com/@nfor.ako",
+  website_sections: [
+    "Home",
+    "Gallery",
+    "AI Help",
+    "Book",
+    "Live Chat",
+    "Social",
+  ],
+};
+
+// ============================================================
 // FAITHI SYSTEM PROMPT
 // ============================================================
 
@@ -644,6 +669,47 @@ Do not mention:
 Give a customer-friendly response instead.
 
 ============================================================
+FAITH HAIR STYLE WEBSITE / HOMEPAGE
+============================================================
+
+When a customer refers to:
+
+- the homepage
+- the home page
+- our website
+- this website
+- the Faith Hair Style website
+- the platform
+- the app
+- the gallery
+- the booking page
+- the social page
+
+treat those references as the Faith Hair Style business experience, not as
+an unrelated external website.
+
+Do NOT say you cannot access external pages when the customer is referring
+to Faith Hair Style's own website/app.
+
+Use LIVE SALON DATA and WEBSITE KNOWLEDGE to answer the question.
+
+Examples:
+
+Customer: "Check on the homepage."
+If the previous question was about the phone number, use the salon phone
+from BUSINESS INFORMATION / WEBSITE KNOWLEDGE and answer it directly.
+
+Customer: "What is on the gallery page?"
+Use live service/image information and explain what is available.
+
+Customer: "Can I book from here?"
+Yes. If the required booking details are available, complete the booking
+directly through the agent action system. Do not send the customer away.
+
+For website facts, prefer Supabase data. Use WEBSITE FALLBACK FACTS only
+when the same public fact is not yet present in Supabase.
+
+============================================================
 LIVE DATA AUTHORITY
 ============================================================
 
@@ -767,6 +833,223 @@ Do not make the customer perform unnecessary work.
 
 function cleanString(value: unknown): string {
   return value == null ? "" : String(value).trim();
+}
+
+async function loadOptionalTableRows(
+  supabase: any,
+  tableNames: string[],
+  limit = 50,
+): Promise<{ rows: Record<string, unknown>[]; table: string | null }> {
+  for (const tableName of tableNames) {
+    try {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select("*")
+        .limit(limit);
+
+      if (!error && Array.isArray(data)) {
+        return {
+          rows: data as Record<string, unknown>[],
+          table: tableName,
+        };
+      }
+    } catch (_) {
+      // Optional website-content tables are allowed to be absent.
+    }
+  }
+
+  return { rows: [], table: null };
+}
+
+function findWebsiteField(
+  rows: Record<string, unknown>[],
+  aliases: string[],
+): string {
+  const wanted = aliases.map((value) => value.toLowerCase());
+
+  for (const row of rows) {
+    // Wide-row schema: { phone: "...", address: "..." }
+    for (const alias of aliases) {
+      const value = cleanString((row as any)?.[alias]);
+      if (value) return value;
+    }
+
+    // Key/value schema: { key: "phone", value: "..." }
+    const rowKey = cleanString(
+      (row as any)?.key ??
+        (row as any)?.name ??
+        (row as any)?.label ??
+        (row as any)?.title,
+    ).toLowerCase();
+
+    if (rowKey && wanted.some((alias) => rowKey === alias || rowKey.includes(alias))) {
+      const value = cleanString(
+        (row as any)?.value ??
+          (row as any)?.content ??
+          (row as any)?.detail ??
+          (row as any)?.description ??
+          (row as any)?.text,
+      );
+      if (value) return value;
+    }
+  }
+
+  return "";
+}
+
+function buildWebsiteKnowledge(
+  businessInfo: Record<string, unknown>[],
+  faqs: Record<string, unknown>[],
+  testimonials: Record<string, unknown>[],
+  salonHours: Record<string, unknown>[],
+) {
+  const phone = findWebsiteField(businessInfo, [
+    "phone",
+    "phone_number",
+    "business_phone",
+    "contact_phone",
+    "contact_number",
+    "telephone",
+  ]) || WEBSITE_FALLBACK_FACTS.phone;
+
+  const whatsapp = findWebsiteField(businessInfo, [
+    "whatsapp",
+    "whatsapp_number",
+    "whatsapp_phone",
+  ]) || WEBSITE_FALLBACK_FACTS.whatsapp;
+
+  const instagram = findWebsiteField(businessInfo, [
+    "instagram",
+    "instagram_url",
+    "instagram_link",
+  ]) || WEBSITE_FALLBACK_FACTS.instagram_url;
+
+  const tiktok = findWebsiteField(businessInfo, [
+    "tiktok",
+    "tiktok_url",
+    "tiktok_link",
+  ]) || WEBSITE_FALLBACK_FACTS.tiktok_url;
+
+  const address = findWebsiteField(businessInfo, [
+    "address",
+    "street_address",
+    "business_address",
+    "location",
+  ]);
+
+  const email = findWebsiteField(businessInfo, [
+    "email",
+    "email_address",
+    "contact_email",
+  ]);
+
+  const businessName = findWebsiteField(businessInfo, [
+    "business_name",
+    "salon_name",
+    "name",
+  ]) || WEBSITE_FALLBACK_FACTS.business_name;
+
+  return {
+    business_name: businessName,
+    location: address || WEBSITE_FALLBACK_FACTS.location,
+    address: address || null,
+    phone,
+    whatsapp,
+    email: email || null,
+    instagram_url: instagram,
+    tiktok_url: tiktok,
+    website_sections: WEBSITE_FALLBACK_FACTS.website_sections,
+    faqs,
+    testimonials,
+    salon_hours: salonHours,
+  };
+}
+
+function recentConversationText(
+  history: Record<string, unknown>[],
+  customerMessage: string,
+): string {
+  const recent = history
+    .slice(-4)
+    .map((item) => cleanString((item as any)?.content))
+    .filter(Boolean);
+
+  return [...recent, customerMessage].join("\n").toLowerCase();
+}
+
+function buildOwnWebsiteReferenceReply({
+  customerMessage,
+  history,
+  websiteKnowledge,
+}: {
+  customerMessage: string;
+  history: Record<string, unknown>[];
+  websiteKnowledge: ReturnType<typeof buildWebsiteKnowledge>;
+}): string {
+  const current = customerMessage.toLowerCase().trim();
+  const mentionsOwnSite = [
+    "homepage",
+    "home page",
+    "website",
+    "web site",
+    "this page",
+    "our page",
+    "platform",
+    "the app",
+    "your app",
+  ].some((term) => current.includes(term));
+
+  if (!mentionsOwnSite) return "";
+
+  const context = recentConversationText(history, customerMessage);
+
+  if (
+    context.includes("phone") ||
+    context.includes("number") ||
+    context.includes("contact") ||
+    context.includes("call")
+  ) {
+    const parts = [
+      `Yes. Faith Hair Style lists ${websiteKnowledge.phone} as the contact number.`,
+    ];
+    if (websiteKnowledge.whatsapp) {
+      parts.push(`You can also use ${websiteKnowledge.whatsapp} for WhatsApp.`);
+    }
+    parts.push("I can continue helping you here too.");
+    return parts.join(" ");
+  }
+
+  if (context.includes("whatsapp")) {
+    return `Yes. The Faith Hair Style WhatsApp number is ${websiteKnowledge.whatsapp}. I can also continue your booking here.`;
+  }
+
+  if (context.includes("instagram")) {
+    return `Yes. Faith Hair Style's Instagram is ${websiteKnowledge.instagram_url}.`;
+  }
+
+  if (context.includes("tiktok")) {
+    return `Yes. Faith Hair Style's TikTok is ${websiteKnowledge.tiktok_url}.`;
+  }
+
+  if (
+    context.includes("address") ||
+    context.includes("location") ||
+    context.includes("where are you")
+  ) {
+    return websiteKnowledge.address
+      ? `Faith Hair Style is located at ${websiteKnowledge.address}.`
+      : `Faith Hair Style is in ${websiteKnowledge.location}. The exact street address is not listed in the salon data I have right now.`;
+  }
+
+  if (context.includes("email")) {
+    return websiteKnowledge.email
+      ? `Faith Hair Style's contact email is ${websiteKnowledge.email}.`
+      : "I don't see a confirmed public email address in the salon information right now. You can use the listed phone/WhatsApp contact or continue with me here.";
+  }
+
+  // For broader website/page questions, the model receives WEBSITE KNOWLEDGE
+  // and all live salon tables in the next step and can answer naturally.
+  return "";
 }
 
 function containsAny(
@@ -3758,18 +4041,7 @@ Deno.serve(async (req) => {
       error: servicesError,
     } = await supabase
       .from("services")
-      .select(
-        `
-          id,
-          name,
-          category,
-          description,
-          price,
-          duration_minutes,
-          image_url,
-          is_active
-        `,
-      )
+      .select("*")
       .eq("is_active", true)
       .order(
         "price",
@@ -3803,13 +4075,7 @@ Deno.serve(async (req) => {
         error,
       } = await supabase
         .from("hair_colors")
-        .select(
-          `
-            code,
-            name,
-            is_active
-          `,
-        )
+        .select("*")
         .eq(
           "is_active",
           true,
@@ -3935,29 +4201,36 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================
-    // LOAD HOURS
+    // LOAD HOURS / FAQ / TESTIMONIALS FOR WEBSITE KNOWLEDGE
     // ========================================================
 
-    let salonHours: any[] = [];
+    const loadedHours = await loadOptionalTableRows(
+      supabase,
+      ["salon_hours", "hours"],
+      30,
+    );
+    const salonHours = loadedHours.rows;
 
-    try {
-      const {
-        data,
-        error,
-      } = await supabase
-        .from("salon_hours")
-        .select("*")
-        .limit(20);
+    const loadedFaqs = await loadOptionalTableRows(
+      supabase,
+      ["faqs", "faq"],
+      60,
+    );
+    const faqs = loadedFaqs.rows;
 
-      if (!error && Array.isArray(data)) {
-        salonHours = data;
-      }
-    } catch (error) {
-      console.error(
-        "Salon hours error:",
-        error,
-      );
-    }
+    const loadedTestimonials = await loadOptionalTableRows(
+      supabase,
+      ["testimonials"],
+      40,
+    );
+    const testimonials = loadedTestimonials.rows;
+
+    const websiteKnowledge = buildWebsiteKnowledge(
+      businessInfo,
+      faqs,
+      testimonials,
+      salonHours,
+    );
 
     // ========================================================
     // LOAD APPOINTMENTS / BOOKINGS
@@ -4056,6 +4329,24 @@ ${JSON.stringify(
   availability,
 )}
 
+WEBSITE KNOWLEDGE (FAITH HAIR STYLE OWN WEBSITE / APP):
+
+${JSON.stringify(
+  websiteKnowledge,
+)}
+
+FAQ SOURCE TABLE:
+
+${JSON.stringify(loadedFaqs.table)}
+
+TESTIMONIAL SOURCE TABLE:
+
+${JSON.stringify(loadedTestimonials.table)}
+
+HOURS SOURCE TABLE:
+
+${JSON.stringify(loadedHours.table)}
+
 BUSINESS INFORMATION:
 
 ${JSON.stringify(
@@ -4083,7 +4374,14 @@ CURRENT SALON DATE AND TIME is authoritative for date/time questions.
 When appointment data is present, use it instead of saying you cannot
 access appointments or the appointment page.
 
-Never expose phone numbers, email addresses, or private contact details.
+When the customer refers to Faith Hair Style's homepage, website, platform,
+app, gallery, booking page, or social page, use WEBSITE KNOWLEDGE plus the
+live salon tables. Do not call the salon's own website an inaccessible
+external page.
+
+Public business contact details from WEBSITE KNOWLEDGE may be shared.
+Never expose another customer's phone number, email address, or other private
+booking/contact details.
 
 Do not invent missing salon facts.
 
@@ -4101,19 +4399,34 @@ If information is unavailable, tell the customer it needs confirmation.
     let agentActionResult: AgentActionResult | undefined;
     let agentEngine = "langgraph";
 
+    // Resolve references to Faith Hair Style's own homepage/app before the
+    // model runs. This fixes replies such as "I can't access external pages"
+    // when the customer is actually referring to this salon's own website.
+    const deterministicWebsiteReply = buildOwnWebsiteReferenceReply({
+      customerMessage,
+      history,
+      websiteKnowledge,
+    });
+
+    if (deterministicWebsiteReply) {
+      reply = deterministicWebsiteReply;
+      agentEngine = "deterministic_website_context";
+    }
+
     // Handle short explanatory follow-ups such as "why" deterministically
     // when the previous statement was about appointment availability.
     // This prevents Faithi from simply repeating the same availability answer.
-    const deterministicWhyReply =
-      await buildAvailabilityWhyReply({
-        supabase,
-        customerMessage,
-        history,
-        salonClock,
-        salonHours,
-        appointments,
-        availability,
-      });
+    const deterministicWhyReply = !reply
+      ? await buildAvailabilityWhyReply({
+          supabase,
+          customerMessage,
+          history,
+          salonClock,
+          salonHours,
+          appointments,
+          availability,
+        })
+      : "";
 
     if (deterministicWhyReply) {
       reply = deterministicWhyReply;
@@ -4466,6 +4779,24 @@ If information is unavailable, tell the customer it needs confirmation.
 
             appointments_loaded:
               appointments.length,
+
+            business_info_loaded:
+              businessInfo.length,
+
+            policies_loaded:
+              policies.length,
+
+            hours_loaded:
+              salonHours.length,
+
+            faqs_loaded:
+              faqs.length,
+
+            testimonials_loaded:
+              testimonials.length,
+
+            website_knowledge_enabled:
+              true,
 
             today_appointments_loaded:
               todayAppointments.length,
