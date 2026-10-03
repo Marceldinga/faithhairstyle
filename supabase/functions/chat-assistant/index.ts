@@ -632,6 +632,36 @@ If live salon information does not contain the answer, say that the
 information needs confirmation.
 
 ============================================================
+CURRENT DATE / TIME
+============================================================
+
+The live salon context includes CURRENT SALON DATE AND TIME.
+
+When the customer asks for today's date, day, current time, tomorrow,
+this weekend, or another relative date, use that live salon clock.
+
+Never say you do not know today's date when CURRENT SALON DATE AND TIME
+is present.
+
+============================================================
+APPOINTMENT LOOKUP
+============================================================
+
+The live salon context may include CURRENT/FUTURE APPOINTMENTS loaded
+from the salon appointment or booking table.
+
+Use those appointment records when the customer asks about appointments.
+
+Never say you cannot access the appointment page when appointment data
+has been provided in LIVE SALON DATA.
+
+Do not reveal another customer's phone number, email address, or other
+private contact information.
+
+If an appointment cannot be uniquely matched to the customer, ask for
+one identifying detail at a time instead of guessing.
+
+============================================================
 FINAL AGENT RULE
 ============================================================
 
@@ -776,6 +806,240 @@ function removeThinking(text: string): string {
 }
 
 // ============================================================
+// SALON CLOCK + APPOINTMENT HELPERS
+// ============================================================
+
+const DEFAULT_SALON_TIME_ZONE = "America/New_York";
+
+function getSalonClock(timeZone: string) {
+  const now = new Date();
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    weekday: "long",
+  }).formatToParts(now);
+
+  const part = (type: string) =>
+    parts.find((item) => item.type === type)?.value || "";
+
+  const isoDate = `${part("year")}-${part("month")}-${part("day")}`;
+  const displayDate = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(now);
+
+  const displayTime = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(now);
+
+  return {
+    isoDate,
+    displayDate,
+    displayTime,
+    timeZone,
+  };
+}
+
+function pickFirst(
+  row: Record<string, unknown>,
+  keys: string[],
+): unknown {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+  return null;
+}
+
+function normalizeDateOnly(value: unknown): string {
+  const text = cleanString(value);
+  if (!text) return "";
+
+  const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) return isoMatch[1];
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function sanitizeAppointment(
+  row: Record<string, unknown>,
+  sourceTable: string,
+) {
+  const date = pickFirst(row, [
+    "appointment_date",
+    "preferred_date",
+    "booking_date",
+    "scheduled_date",
+    "slot_date",
+    "date",
+    "start_date",
+    "starts_at",
+    "start_at",
+    "scheduled_at",
+  ]);
+
+  const time = pickFirst(row, [
+    "appointment_time",
+    "preferred_time",
+    "start_time",
+    "booking_time",
+    "time",
+    "starts_at",
+    "start_at",
+    "scheduled_at",
+  ]);
+
+  const service = pickFirst(row, [
+    "service_name",
+    "service",
+    "hairstyle",
+    "style",
+    "service_title",
+  ]);
+
+  const status = pickFirst(row, [
+    "status",
+    "booking_status",
+    "appointment_status",
+  ]);
+
+  const customerName = pickFirst(row, [
+    "customer_name",
+    "client_name",
+    "name",
+  ]);
+
+  return {
+    source_table: sourceTable,
+    id: pickFirst(row, ["id", "booking_id", "appointment_id"]),
+    date: date ? normalizeDateOnly(date) || cleanString(date) : "",
+    time: cleanString(time),
+    service: cleanString(service),
+    status: cleanString(status),
+    customer_name: cleanString(customerName),
+    braid_size: cleanString(pickFirst(row, ["braid_size", "size"])),
+    braid_length: cleanString(pickFirst(row, ["braid_length", "length"])),
+    color: cleanString(pickFirst(row, ["hair_color", "color"])),
+  };
+}
+
+async function loadAppointmentRows(
+  supabase: any,
+  today: string,
+) {
+  const tableNames = ["appointments", "bookings"];
+  const candidateDateColumns = [
+    "appointment_date",
+    "preferred_date",
+    "booking_date",
+    "scheduled_date",
+    "slot_date",
+    "date",
+  ];
+
+  const results: any[] = [];
+  const loadedTables: string[] = [];
+
+  for (const tableName of tableNames) {
+    let tableLoaded = false;
+
+    for (const column of candidateDateColumns) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select("*")
+        .gte(column, today)
+        .limit(100);
+
+      if (!error && Array.isArray(data)) {
+        results.push(
+          ...data.map((row: Record<string, unknown>) =>
+            sanitizeAppointment(row, tableName)
+          ),
+        );
+        loadedTables.push(tableName);
+        tableLoaded = true;
+        break;
+      }
+
+      const message = cleanString(error?.message).toLowerCase();
+      const code = cleanString(error?.code);
+
+      // If the table itself does not exist, trying more columns is pointless.
+      if (
+        code === "42P01" ||
+        message.includes("relation") && message.includes("does not exist") ||
+        message.includes("could not find the table")
+      ) {
+        tableLoaded = true;
+        break;
+      }
+    }
+
+    // If no known date column worked, load a small sample and filter in code.
+    if (!tableLoaded) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select("*")
+        .limit(100);
+
+      if (!error && Array.isArray(data)) {
+        results.push(
+          ...data.map((row: Record<string, unknown>) =>
+            sanitizeAppointment(row, tableName)
+          ),
+        );
+        loadedTables.push(tableName);
+      }
+    }
+  }
+
+  const unique = new Map<string, any>();
+
+  for (const item of results) {
+    const key = [
+      item.source_table,
+      item.id,
+      item.date,
+      item.time,
+      item.service,
+      item.customer_name,
+    ].join("|");
+    unique.set(key, item);
+  }
+
+  const appointments = [...unique.values()]
+    .filter((item) => !item.date || item.date >= today)
+    .sort((a, b) => {
+      const left = `${a.date || "9999-12-31"} ${a.time || ""}`;
+      const right = `${b.date || "9999-12-31"} ${b.time || ""}`;
+      return left.localeCompare(right);
+    })
+    .slice(0, 100);
+
+  return {
+    appointments,
+    loadedTables,
+  };
+}
+
+// ============================================================
 // SERVICE MATCHING
 // ============================================================
 
@@ -886,6 +1150,17 @@ Deno.serve(async (req) => {
         },
       },
     );
+
+    // ========================================================
+    // CURRENT SALON DATE / TIME
+    // ========================================================
+
+    const salonTimeZone =
+      Deno.env.get("SALON_TIME_ZONE") ||
+      DEFAULT_SALON_TIME_ZONE;
+
+    const salonClock =
+      getSalonClock(salonTimeZone);
 
     // ========================================================
     // REQUEST
@@ -1164,6 +1439,32 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================
+    // LOAD APPOINTMENTS / BOOKINGS
+    // ========================================================
+
+    let appointments: any[] = [];
+    let appointmentTables: string[] = [];
+
+    try {
+      const loaded = await loadAppointmentRows(
+        supabase,
+        salonClock.isoDate,
+      );
+
+      appointments = loaded.appointments;
+      appointmentTables = loaded.loadedTables;
+    } catch (error) {
+      console.error(
+        "Appointments error:",
+        error,
+      );
+    }
+
+    const todayAppointments = appointments.filter(
+      (item) => item.date === salonClock.isoDate,
+    );
+
+    // ========================================================
     // LIVE CONTEXT FOR QWEN
     // ========================================================
 
@@ -1172,6 +1473,30 @@ CURRENT CUSTOMER PREFERENCES:
 
 ${JSON.stringify(
   customerPreferences,
+)}
+
+CURRENT SALON DATE AND TIME:
+
+${JSON.stringify(
+  salonClock,
+)}
+
+TODAY'S APPOINTMENTS:
+
+${JSON.stringify(
+  todayAppointments,
+)}
+
+CURRENT/FUTURE APPOINTMENTS:
+
+${JSON.stringify(
+  appointments,
+)}
+
+APPOINTMENT TABLES FOUND:
+
+${JSON.stringify(
+  appointmentTables,
 )}
 
 LIVE FAITH HAIR STYLE SERVICES:
@@ -1213,6 +1538,13 @@ ${JSON.stringify(
 IMPORTANT:
 
 Use this live information as the source of truth.
+
+CURRENT SALON DATE AND TIME is authoritative for date/time questions.
+
+When appointment data is present, use it instead of saying you cannot
+access appointments or the appointment page.
+
+Never expose phone numbers, email addresses, or private contact details.
 
 Do not invent missing salon facts.
 
@@ -1394,6 +1726,37 @@ If information is unavailable, tell the customer it needs confirmation.
       }
     }
 
+    // If the user is asking about appointments and no service rows
+    // were selected, return privacy-safe appointment rows to the frontend.
+    if (
+      structuredRows.length === 0 &&
+      containsAny(customerMessage, [
+        "appointment",
+        "appointments",
+        "booking",
+        "bookings",
+        "schedule",
+        "today",
+        "tomorrow",
+      ])
+    ) {
+      structuredRows = appointments
+        .slice(0, 10)
+        .map((item) => ({
+          source_table: item.source_table,
+          id: item.id,
+          date: item.date,
+          time: item.time,
+          service: item.service,
+          status: item.status,
+          // Do not expose customer contact information here.
+          customer_name: item.customer_name,
+          braid_size: item.braid_size,
+          braid_length: item.braid_length,
+          color: item.color,
+        }));
+    }
+
     // ========================================================
     // SUCCESS
     // ========================================================
@@ -1431,6 +1794,24 @@ If information is unavailable, tell the customer it needs confirmation.
 
             availability_loaded:
               availability.length,
+
+            appointments_loaded:
+              appointments.length,
+
+            today_appointments_loaded:
+              todayAppointments.length,
+
+            appointment_tables:
+              appointmentTables,
+
+            current_date:
+              salonClock.isoDate,
+
+            current_time:
+              salonClock.displayTime,
+
+            time_zone:
+              salonClock.timeZone,
           },
         },
       }),
