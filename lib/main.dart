@@ -1380,7 +1380,7 @@ class FaithBrandSection extends StatelessWidget {
                       }
 
                       return Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           for (int i = 0; i < cards.length; i++) ...[
                             Expanded(child: cards[i]),
