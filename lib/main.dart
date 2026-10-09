@@ -367,6 +367,87 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   int page = 0;
   Map<String, dynamic>? selectedService;
+  // This key surrounds public page content, NOT the floating agent.
+  final GlobalKey _currentPublicPageKey = GlobalKey();
+  Timer? _publicPageCaptureTimer;
+
+  void _changePage(int nextPage) {
+    if (nextPage < 0 || nextPage >= FaithiPublicPages.ids.length) return;
+    setState(() => page = nextPage);
+    FaithCopilotController.instance.setActivePage(
+      FaithiPublicPages.ids[nextPage],
+    );
+    _schedulePublicPageCapture();
+  }
+
+  void _schedulePublicPageCapture() {
+    _publicPageCaptureTimer?.cancel();
+    // Wait for AnimatedSwitcher to finish; private form/chat text is NEVER read.
+    _publicPageCaptureTimer = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted) return;
+      _capturePublicPageWords();
+    });
+  }
+
+  void _capturePublicPageWords() {
+    final currentId = FaithiPublicPages.ids[page];
+    if (!FaithiPublicPages.mayReadVisibleWidgets(currentId)) return;
+    final root = _currentPublicPageKey.currentContext;
+    if (root is! Element) return;
+
+    final unique = <String>{};
+    final words = <String>[];
+    var totalLength = 0;
+
+    void collect(String? rawText) {
+      if (rawText == null || totalLength >= 11000) return;
+      final text = rawText.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (text.isEmpty || !unique.add(text)) return;
+      // Do not transmit text input values; only read public Text/RichText.
+      final piece = text.length > 1500 ? text.substring(0, 1500) : text;
+      words.add(piece);
+      totalLength += piece.length + 1;
+    }
+
+    void walk(Element element) {
+      if (totalLength >= 11000) return;
+      final widget = element.widget;
+      // NEVER traverse editable text inputs (including typed search terms).
+      if (widget is EditableText ||
+          widget is TextField ||
+          widget is TextFormField) return;
+      if (widget is Text) {
+        collect(widget.data ?? widget.textSpan?.toPlainText());
+      } else if (widget is RichText) {
+        collect(widget.text.toPlainText());
+      }
+      element.visitChildren(walk);
+    }
+
+    walk(root);
+    FaithCopilotController.instance.setPublicPageWords(
+      currentId,
+      words.join('\n'),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _schedulePublicPageCapture();
+    });
+    // Also catch database-driven service names loaded after initial paint.
+    Future<void>.delayed(const Duration(seconds: 2), () {
+      if (mounted) _capturePublicPageWords();
+    });
+  }
+
+  @override
+  void dispose() {
+    _publicPageCaptureTimer?.cancel();
+    super.dispose();
+  }
 
   static const bottomDestinations = [
     NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
@@ -413,6 +494,8 @@ class _MainPageState extends State<MainPage> {
       selectedService = service;
       page = 3;
     });
+    FaithCopilotController.instance.setActivePage('book');
+    _schedulePublicPageCapture();
   }
 
   Widget currentPage() {
@@ -459,7 +542,7 @@ class _MainPageState extends State<MainPage> {
             NavigationRail(
               minWidth: 94,
               selectedIndex: page,
-              onDestinationSelected: (i) => setState(() => page = i),
+              onDestinationSelected: _changePage,
               labelType: NavigationRailLabelType.all,
               leading: Padding(
                 padding: const EdgeInsets.only(top: 16, bottom: 12),
@@ -476,11 +559,18 @@ class _MainPageState extends State<MainPage> {
               destinations: railDestinations,
             ),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              child: KeyedSubtree(
-                key: ValueKey(page),
-                child: currentPage(),
+            key: _currentPublicPageKey,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (_) {
+                _schedulePublicPageCapture();
+                return false;
+              },
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: KeyedSubtree(
+                  key: ValueKey(page),
+                  child: currentPage(),
+                ),
               ),
             ),
           ),
@@ -490,16 +580,17 @@ class _MainPageState extends State<MainPage> {
           ? null
           : NavigationBar(
               selectedIndex: page,
-              onDestinationSelected: (i) => setState(() => page = i),
+              onDestinationSelected: _changePage,
               destinations: bottomDestinations,
             ),
     );
 
-    // The AI Help tab already shows the full Faithi page, so the floating
-    // launcher is hidden there. On mobile it sits above the bottom nav bar.
+    // The SAME Faithi chat and page-aware question chips are accessible on
+    // all SIX public tabs, including the full AI Help page.
     return FaithAICopilotShell(
       onBook: goToBooking,
-      enabled: page != 2,
+      pageId: FaithiPublicPages.ids[page],
+      enabled: true,
       bottomOffset: wideScreen ? 16 : 88,
       child: appScaffold,
     );
@@ -1987,13 +2078,110 @@ class AiPage extends StatelessWidget {
 }
 
 // ============================================================
+// FAITHI: PUBLIC PAGE-AWARE ASSISTANT
+// This is the one authoritative page map for the six public tabs.
+// Content sent to the AI is PUBLIC text only. Never send visitor form fields,
+// customer messages, owner/admin pages, private bookings or secret keys.
+// ============================================================
+
+class FaithiSuggestedQuestion {
+  const FaithiSuggestedQuestion(this.id, this.label, this.message);
+
+  final String id;
+  final String label;
+  final String message;
+}
+
+class FaithiPublicPages {
+  static const ids = <String>[
+    'home', 'gallery', 'ai_help', 'book', 'live_chat', 'social',
+  ];
+
+  static const names = <String>[
+    'Home', 'Gallery', 'AI Help', 'Book', 'Live Chat', 'Social',
+  ];
+
+  static String title(String id) {
+    final index = ids.indexOf(id);
+    return index >= 0 ? names[index] : names.first;
+  }
+
+  static String route(String id) => id == 'home' ? '/' : '/$id';
+
+  // Visitors' typed input is never read from the booking or live chat pages.
+  // AI Help is excluded too, since it contains private chat history.
+  static bool mayReadVisibleWidgets(String id) =>
+      id == 'home' || id == 'gallery' || id == 'social';
+
+  static List<FaithiSuggestedQuestion> questionsFor(String id) {
+    switch (id) {
+      case 'gallery':
+        return const [
+          FaithiSuggestedQuestion('gallery_choose', 'Help me choose',
+              'Help me choose a hairstyle shown in the gallery.'),
+          FaithiSuggestedQuestion('gallery_price', 'Check a price',
+              'How can I check the current price of a gallery hairstyle?'),
+          FaithiSuggestedQuestion('gallery_color', 'Available colors',
+              'What hair colors are currently available?'),
+        ];
+      case 'ai_help':
+        return const [
+          FaithiSuggestedQuestion('ai_recommend', 'Recommend a style',
+              'Recommend a hairstyle for me. Ask one useful question at a time.'),
+          FaithiSuggestedQuestion('ai_budget', 'Under my budget',
+              'Help me find an actual salon hairstyle within my budget.'),
+          FaithiSuggestedQuestion('ai_openings', 'Check openings',
+              'What are the next confirmed available appointment times?'),
+        ];
+      case 'book':
+        return const [
+          FaithiSuggestedQuestion('book_steps', 'Help me book',
+              'Guide me through the booking form on this page.'),
+          FaithiSuggestedQuestion('book_slots', 'Open appointments',
+              'What actual appointment times are currently available?'),
+          FaithiSuggestedQuestion('book_policies', 'Booking policies',
+              'What confirmed policies should I know before booking?'),
+        ];
+      case 'live_chat':
+        return const [
+          FaithiSuggestedQuestion('chat_stylist', 'Talk to a stylist',
+              'How can I contact a real person at Faith Hair Style?'),
+          FaithiSuggestedQuestion('chat_hours', 'Salon hours',
+              'What are Faith Hair Style’s confirmed opening hours?'),
+          FaithiSuggestedQuestion('chat_hairstyle', 'Help with my style',
+              'Can you help me choose a hairstyle before contacting the salon?'),
+        ];
+      case 'social':
+        return const [
+          FaithiSuggestedQuestion('social_follow', 'Follow us',
+              'Where can I follow Faith Hair Style on social media?'),
+          FaithiSuggestedQuestion('social_gallery', 'Find this look',
+              'Can you help me identify a hairstyle I found on social media?'),
+          FaithiSuggestedQuestion('social_book', 'Book a social style',
+              'How do I book a hairstyle I saw on your social media page?'),
+        ];
+      case 'home':
+      default:
+        return const [
+          FaithiSuggestedQuestion('home_services', 'Our services',
+              'What braiding and natural hairstyle services are currently offered?'),
+          FaithiSuggestedQuestion('home_budget', 'Under my budget',
+              'Help me choose a hairstyle that fits my budget.'),
+          FaithiSuggestedQuestion('home_booking', 'How do I book?',
+              'How do I make an appointment on this website?'),
+        ];
+    }
+  }
+}
+
+// ============================================================
 // FAITH AI / FAITHI COPILOT
 // Current frontend for Faithi backend v4.4+
 //
-// - Uses current Railway production endpoint
+// - Uses the current Supabase chat-assistant Edge Function
 // - Voice input + TTS output
 // - Live Supabase services/colors for UI + booking
-// - Uses exactly one AI model: meta-llama/Llama-3.1-8B-Instruct
+// - Uses existing Hugging Face Qwen3-8B backend
 // - One-model AI path only
 // - Displays real service images returned/matched from Supabase
 // - Preserves conversation history and customer preferences
@@ -2008,12 +2196,14 @@ class FaithAICopilotShell extends StatefulWidget {
     super.key,
     required this.child,
     required this.onBook,
+    required this.pageId,
     this.enabled = true,
     this.bottomOffset = 16,
   });
 
   final Widget child;
   final ValueChanged<Map<String, dynamic>> onBook;
+  final String pageId;
   final bool enabled;
   final double bottomOffset;
 
@@ -2023,6 +2213,25 @@ class FaithAICopilotShell extends StatefulWidget {
 
 class _FaithAICopilotShellState extends State<FaithAICopilotShell> {
   bool _isOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Defer ChangeNotifier updates until the initial build has completed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FaithCopilotController.instance.setActivePage(widget.pageId);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant FaithAICopilotShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pageId != widget.pageId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) FaithCopilotController.instance.setActivePage(widget.pageId);
+      });
+    }
+  }
 
   void _toggleChat() => setState(() => _isOpen = !_isOpen);
 
@@ -2570,7 +2779,7 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
                 Text(
                   _controller.isLoadingData
                       ? 'Loading live salon info...'
-                      : 'Styles • prices • colors • booking',
+                      : 'On ${_controller.activePageTitle} • styles • bookings',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -2632,76 +2841,60 @@ class _FaithAICopilotPanelState extends State<FaithAICopilotPanel> {
   }
 
   Widget _buildQuickActions() {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+    return SizedBox(
+      height: 83,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _QuickChip(
-            label: 'Help me choose',
-            icon: Icons.auto_awesome_rounded,
-            onTap: () => _sendMessage(
-              'Help me choose the best hairstyle for me. Ask me one useful question at a time. When I choose a style, show one matching salon photo if available.',
+          Padding(
+            padding: const EdgeInsets.fromLTRB(13, 7, 12, 1),
+            child: Text(
+              'YOU’RE ON ${_controller.activePageTitle.toUpperCase()} • ASK ABOUT THIS PAGE',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .35,
+              ),
             ),
-            isLoading: _controller.isLoading,
           ),
-          const SizedBox(width: 7),
-          _QuickChip(
-            label: 'Under my budget',
-            icon: Icons.savings_outlined,
-            onTap: () => _sendMessage(
-              'Help me find a hairstyle within my budget. Ask me my budget if I have not told you yet.',
+          Expanded(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              children: [
+                for (final item in _controller.suggestedQuestions) ...[
+                  _QuickChip(
+                    label: item.label,
+                    icon: Icons.auto_awesome_rounded,
+                    onTap: () => _sendMessage(item.message),
+                    isLoading: _controller.isLoading,
+                  ),
+                  const SizedBox(width: 7),
+                ],
+                _QuickChip(
+                  label: 'Show 1 photo',
+                  icon: Icons.photo_outlined,
+                  onTap: () => _sendMessage(
+                    'Show one real salon photo of the style we are discussing.',
+                  ),
+                  isLoading: _controller.isLoading,
+                ),
+                const SizedBox(width: 7),
+                _QuickChip(
+                  label: _controller.hasSubmittedBooking ? 'New booking' : 'Book',
+                  icon: Icons.calendar_month_rounded,
+                  onTap: () => _sendMessage(
+                    _controller.hasSubmittedBooking
+                        ? 'I want to make a new booking.'
+                        : 'I am ready to book the hairstyle we selected.',
+                  ),
+                  isLoading: _controller.isLoading,
+                ),
+              ],
             ),
-            isLoading: _controller.isLoading,
-          ),
-          const SizedBox(width: 7),
-          _QuickChip(
-            label: 'Check price',
-            icon: Icons.attach_money_rounded,
-            onTap: () => _sendMessage(
-              'I want to check the price of a hairstyle. Ask which style if you do not know it yet.',
-            ),
-            isLoading: _controller.isLoading,
-          ),
-          const SizedBox(width: 7),
-          _QuickChip(
-            label: 'Show 1 photo',
-            icon: Icons.photo_outlined,
-            onTap: () => _sendMessage(
-              'Show me one photo of the hairstyle we are discussing. If no style is selected, ask me which style I want to see.',
-            ),
-            isLoading: _controller.isLoading,
-          ),
-          const SizedBox(width: 7),
-          _QuickChip(
-            label: 'Colors',
-            icon: Icons.palette_outlined,
-            onTap: () => _sendMessage(
-              'Help me choose a hair color from the colors currently available.',
-            ),
-            isLoading: _controller.isLoading,
-          ),
-          const SizedBox(width: 7),
-          _QuickChip(
-            label: 'Open times',
-            icon: Icons.schedule_rounded,
-            onTap: () => _sendMessage(
-              'Check the next available appointment times for me.',
-            ),
-            isLoading: _controller.isLoading,
-          ),
-          const SizedBox(width: 7),
-          _QuickChip(
-            label: _controller.hasSubmittedBooking ? 'New booking' : 'Book',
-            icon: Icons.calendar_month_rounded,
-            onTap: () => _sendMessage(
-              _controller.hasSubmittedBooking
-                  ? 'I want to make a new booking.'
-                  : 'I am ready to book the hairstyle we selected.',
-            ),
-            isLoading: _controller.isLoading,
           ),
         ],
       ),
@@ -3322,8 +3515,9 @@ class FaithCopilotController extends ChangeNotifier {
   FaithCopilotController._internal() {
     _messages.add(
       const ChatMessage(
-        text: 'Hi! I’m Faithi, your Faith Hair Style salon agent. '
-            'What would you like me to help you get done today?',
+        text: 'Welcome to Faith Hair Style! 💕 I’m Faithi, your salon agent. '
+            'I can help you explore hairstyles, check current prices, or book. '
+            'What style are you interested in today?',
         isUser: false,
       ),
     );
@@ -3341,6 +3535,44 @@ class FaithCopilotController extends ChangeNotifier {
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   bool get hasChatHistory => _messages.length > 1;
+
+  String _activePageId = 'home';
+  String _publicPageWords = '';
+  List<FaithiSuggestedQuestion> _serverPageQuestions = const [];
+  String? _serverQuestionsPageId;
+  final String _sessionId =
+      DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+
+  String get activePageId => _activePageId;
+  String get activePageTitle => FaithiPublicPages.title(_activePageId);
+  List<FaithiSuggestedQuestion> get suggestedQuestions {
+    final combined = <FaithiSuggestedQuestion>[
+      FaithiSuggestedQuestion('page_explain', 'About this page',
+          'What can I do on the ${activePageTitle} page? Explain what this page shows.'),
+      if (_serverQuestionsPageId == _activePageId) ..._serverPageQuestions,
+      ...FaithiPublicPages.questionsFor(_activePageId),
+    ];
+    final seen = <String>{};
+    return combined.where((question) => seen.add(question.message)).take(5).toList();
+  }
+
+  void setActivePage(String pageId) {
+    final valid = FaithiPublicPages.ids.contains(pageId) ? pageId : 'home';
+    if (_activePageId == valid) return;
+    _activePageId = valid;
+    _publicPageWords = '';
+    _serverPageQuestions = const [];
+    _serverQuestionsPageId = null;
+    notifyListeners();
+  }
+
+  void setPublicPageWords(String pageId, String value) {
+    if (pageId != _activePageId ||
+        !FaithiPublicPages.mayReadVisibleWidgets(pageId)) return;
+    final trimmed = value.length > 11000 ? value.substring(0, 11000) : value;
+    // This intentionally does NOT notify listeners every time somebody scrolls.
+    _publicPageWords = trimmed;
+  }
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -3972,7 +4204,12 @@ class FaithCopilotController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final requestPageId = _activePageId;
       final result = await _fetchAIResponseWithRetry(cleanText);
+      if (requestPageId == _activePageId && result.quickActions.isNotEmpty) {
+        _serverPageQuestions = result.quickActions;
+        _serverQuestionsPageId = requestPageId;
+      }
 
       // Capture successful booking actions before formatting the reply.
       _captureAgentBookingState(result.meta);
@@ -4119,6 +4356,16 @@ class FaithCopilotController extends ChangeNotifier {
           body: {
             'message': customerMessage,
             'history': history,
+            'session_id': _sessionId,
+            'source': 'website',
+            'page_context': {
+              'page_id': _activePageId,
+              'title': activePageTitle,
+              'route': FaithiPublicPages.route(_activePageId),
+              'visible_text': FaithiPublicPages.mayReadVisibleWidgets(_activePageId)
+                  ? _publicPageWords
+                  : '',
+            },
             'customer_preferences': {
               ...preferences.toMap(),
               if (_lastBookingId != null) 'current_booking_id': _lastBookingId,
@@ -4166,10 +4413,26 @@ class FaithCopilotController extends ChangeNotifier {
         ? Map<String, dynamic>.from(decoded['meta'])
         : <String, dynamic>{};
 
+    final suggestions = <FaithiSuggestedQuestion>[];
+    final rawSuggestions = decoded['quick_actions'];
+    if (rawSuggestions is List) {
+      for (final raw in rawSuggestions) {
+        if (raw is! Map) continue;
+        final label = (raw['label'] ?? '').toString().trim();
+        final message = (raw['message'] ?? '').toString().trim();
+        if (label.isEmpty || message.isEmpty) continue;
+        suggestions.add(FaithiSuggestedQuestion(
+          (raw['id'] ?? label).toString(), label, message,
+        ));
+        if (suggestions.length >= 5) break;
+      }
+    }
+
     return FaithiApiResult(
       reply: reply,
       rows: rows,
       meta: meta,
+      quickActions: suggestions,
     );
   }
 
@@ -4813,11 +5076,13 @@ class FaithiApiResult {
     required this.reply,
     required this.rows,
     required this.meta,
+    this.quickActions = const [],
   });
 
   final String reply;
   final List<Map<String, dynamic>> rows;
   final Map<String, dynamic> meta;
+  final List<FaithiSuggestedQuestion> quickActions;
 }
 
 // ============================================================
